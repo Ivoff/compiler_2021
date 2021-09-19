@@ -2,12 +2,11 @@
 #define SCANNER_HPP
 
 #include <string>
-#include <vector>
 
 #include "token.hpp"
 
 struct Scanner {
-    std::vector<char> input_buffer;
+    char* input_buffer;
     int m_buffer_pos;
     int m_current_line;    
     int m_state;
