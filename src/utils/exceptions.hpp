@@ -3,6 +3,6 @@
 
 enum class EExeptions {
     ESTADO_ZERO
-}
+};
 
 #endif

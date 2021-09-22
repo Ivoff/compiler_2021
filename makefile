@@ -1,7 +1,7 @@
 OBJS = src/*.*pp src/lexical_analyser/*.*pp src/utils/*.*pp 
 INCLUDE_DIR = -Isrc
 CC = g++
-COMPILER_FLAGS = -w
+COMPILER_FLAGS = -w -g
 OBJ_NAME = a.out
 
 all: $(OBJS)
@@ -12,3 +12,6 @@ run:
 	./build/$(OBJ_NAME)
 reset:
 	make clear && make
+
+debug:
+	gdb ./build/$(OBJ_NAME)

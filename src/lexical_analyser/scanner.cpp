@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <exception>
 
 #include "scanner.hpp"
 #include "../utils/exceptions.hpp"
@@ -64,13 +65,13 @@ Token* Scanner::next_token() {
         return nullptr;
     }
     char curr_char;
+    std::string lexem;
     while(true) {
-        curr_char = next_char();
-        std::string lexem;
+        curr_char = next_char();        
         switch(m_state) {
             case 0:                
                 if (is_eof()) {
-                    break;                    
+                    return nullptr;                                
                 }
                 if (is_space(curr_char)) {
                     m_state = 0;          
@@ -82,7 +83,46 @@ Token* Scanner::next_token() {
                     break;
                 }
                 else if (is_letter(curr_char)) {
+                    lexem += curr_char;
+                    m_state = 1;
+                    break;
+                }
+            break;
+            case 1:
+                if (is_letter(curr_char) || is_digit(curr_char) || curr_char == '_') {
+                    lexem += curr_char;
+                    m_state = 1;
+                    break;
+                } else {                    
+                    m_state = 0;
+                    regress();
                     
+                    if (is_reserved(lexem))
+                        return new Token(ETokenId::RESERVED, lexem);
+                    
+                    if (lexem == std::string("if"))
+                        return new Token(ETokenId::IF, lexem);
+
+                    if (lexem == std::string("then"))
+                        return new Token(ETokenId::THEN, lexem);
+
+                    if (lexem == std::string("else"))
+                        return new Token(ETokenId::ELSE, lexem);
+                    
+                    else
+                        return new Token(ETokenId::IDENT, lexem);
+
+                    // else {
+                    //     char output_str[250];
+                    //     sprintf(
+                    //         output_str, 
+                    //         "%d:%d Lexema %s nao reconhecido", 
+                    //         m_current_line, 
+                    //         m_current_char-lexem.size(),
+                    //         lexem.c_str()
+                    //     );
+                    //     throw std::runtime_error(output_str);
+                    // }                        
                 }
             break;
         }

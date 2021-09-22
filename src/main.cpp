@@ -3,7 +3,12 @@
 
 int main() {
 
-    Scanner scanner = Scanner("/home/zilas/Documents/C/criptografia/main.c");
+    Scanner scanner = Scanner("input");
+
+    Token* cur_token;
+    while((cur_token = scanner.next_token()) != nullptr) {
+        printf("%s\n", cur_token->to_string().c_str());
+    }
 
     return 0;
 }
