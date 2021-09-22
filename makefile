@@ -1,4 +1,4 @@
-OBJS = src/*.*pp src/lexical_analyser/*.cpp src/lexical_analyser/*.hpp 
+OBJS = src/*.*pp src/lexical_analyser/*.*pp src/utils/*.*pp 
 INCLUDE_DIR = -Isrc
 CC = g++
 COMPILER_FLAGS = -w
