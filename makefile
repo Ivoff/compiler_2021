@@ -1,7 +1,7 @@
-OBJS = src/*.*pp src/lexical_analyser/*.*pp src/utils/*.*pp 
+OBJS = src/*.*pp src/lexical_analyser/*.*pp
 INCLUDE_DIR = -Isrc
 CC = g++
-COMPILER_FLAGS = -w -g
+COMPILER_FLAGS = -w -g -std=c++11
 OBJ_NAME = a.out
 
 all: $(OBJS)

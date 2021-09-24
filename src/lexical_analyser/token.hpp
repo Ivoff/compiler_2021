@@ -3,6 +3,7 @@
 
 #include <string>
 #include <string.h>
+#include <map>
 
 enum class ETokenId {
     IDENT = 0x100,
@@ -33,9 +34,9 @@ struct Token {
         bool m_has_not_attr;
         int m_int_attr;
         float m_float_attr;
-        double m_double_attr;
+        double m_real_attr;
         char* m_str_attr;
-    };
+    };    
 
     Token(ETokenId id) {
         m_id = id;    
@@ -54,7 +55,7 @@ struct Token {
 
     Token(ETokenId id, double double_attr) {
         m_id = id;
-        m_double_attr = double_attr;
+        m_real_attr = double_attr;
     }
 
     Token(ETokenId id, std::string str_attr) {        
@@ -65,11 +66,29 @@ struct Token {
 
     std::string to_string() {        
         char output_str[250];
-        sprintf(
-            output_str, 
-            "[%d, %s]",
-            m_id, m_str_attr
-        );
+        
+        if (m_id == ETokenId::NUMBER_INT) {
+            sprintf(
+                output_str, 
+                "[%d, %d]",
+                m_id, m_int_attr
+            );
+        }
+        else if (m_id == ETokenId::NUMBER_REAL) {
+            sprintf(
+                output_str, 
+                "[%d, %lf]",
+                m_id, m_real_attr
+            );
+        } 
+        else {
+            sprintf(
+                output_str, 
+                "[%d, %s]",
+                m_id, m_str_attr
+            );
+        }
+
         return std::string(output_str);
     }
 };
