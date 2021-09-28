@@ -14,7 +14,8 @@ struct Scanner {
     int m_buffer_pos;
     int m_current_line;    
     int m_state;
-    size_t m_file_size;        
+    size_t m_file_size;   
+         
     std::unordered_set<std::string> m_reserved_set {
         "program",
         "begin",
@@ -56,10 +57,7 @@ struct Scanner {
     };    
 
     Scanner(std::string file_path);        
-    Token* next_token();
-    double str_to_real(std::string input);
-    int str_to_int(std::string input);
-    void split_sci_not(const std::string& input, int e_pos, double& coef, int& exp);
+    Token* next_token();    
 
     private:
         bool is_digit(char input);
@@ -69,11 +67,15 @@ struct Scanner {
         bool is_eof();        
         bool is_reserved(std::string input);        
         bool is_symbol(char input);
+        bool is_symbol(std::string input);
         bool is_cond(std::string input);
         bool is_op(std::string input);
         bool is_op(char input);
         char next_char();
         char regress();
+        double str_to_real(std::string input);
+        int str_to_int(std::string input);
+        void split_sci_not(const std::string& input, int e_pos, double& coef, int& exp);
         std::string error_message(std::string lexem);
         void add_reserved_words(std::list<std::string>);        
 };

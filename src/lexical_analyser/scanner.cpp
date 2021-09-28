@@ -19,14 +19,12 @@ Scanner::Scanner(std::string file_path) {
     while((curr_char = getc(handle)) != EOF) {
         m_file_size += 1;
     }
+    m_file_size += 1;
     m_input_buffer = (char* )calloc(sizeof(char), m_file_size);
     fseek(handle, 0, SEEK_SET);
     for(int i = 0; (curr_char = getc(handle)) != EOF && i < m_file_size; i += 1) {
         m_input_buffer[i] = curr_char;
-    }
-
-    printf("bytes read: %d\n", m_file_size);
-    printf("contents from file:\n%s\n", m_input_buffer);
+    }    
 };
 
 bool Scanner::is_digit(char input) {
@@ -53,6 +51,10 @@ bool Scanner::is_symbol(char input) {
     return m_symbols_set.find(input) != m_symbols_set.end();
 };
 
+bool Scanner::is_symbol(std::string input) {
+    return input.length() == 1 && is_symbol(input[0]);
+};
+
 bool Scanner::is_cond(std::string input) {
     return m_cond_map.find(input) != m_cond_map.end();
 }
@@ -72,9 +74,8 @@ bool Scanner::is_eof() {
 }
 
 std::string Scanner::error_message(std::string lexem) {
-    return std::to_string(m_current_line) + ":" +
-            std::to_string(m_current_char) +
-            "Início do lexema\"" + lexem + "\"" +
+    return std::to_string(m_current_line) + ": " +
+            "Início do lexema \"" + lexem + "\" " +
             "não reconhecido";
 }
 
@@ -133,7 +134,8 @@ Token* Scanner::next_token() {
     if (is_eof()) {
         return nullptr;
     }
-    char curr_char;
+
+    char curr_char;    
     std::string lexem;
     while(true) {
         curr_char = next_char();        
@@ -162,18 +164,19 @@ Token* Scanner::next_token() {
                     break;
                 } 
                 else if (is_symbol(curr_char)) {
-                    if (curr_char == ':') {
-                        lexem += curr_char;
+                    lexem += curr_char;
+                    if (curr_char == ':') {                        
                         m_state = 12;
                         break;
                     }
                     else {
-                        return new Token(ETokenId::SYMBOL, curr_char);
+                        m_state = 11;
+                        break;
                     }
                 }
                 else if (is_op(curr_char)) {
                     lexem += curr_char;
-                    if (curr_char != '<' || curr_char != '>') {
+                    if (curr_char != '<' && curr_char != '>') {
                         m_state = 13;
                         break;
                     } 
@@ -184,6 +187,9 @@ Token* Scanner::next_token() {
                     else if (curr_char == '<') {
                         m_state = 16;
                         break;
+                    } 
+                    else {
+                        throw std::runtime_error("Tem algo de errado no reconhecimento de operadores");
                     }
                 }
 
@@ -200,13 +206,13 @@ Token* Scanner::next_token() {
                     regress();
                     
                     if (is_reserved(lexem))
-                        return new Token(ETokenId::RESERVED, lexem);
+                        return new Token(ETokenId::RESERVED, lexem, lexem);                    
                     
                     if (is_cond(lexem))
-                        return new Token(m_cond_map[lexem], lexem);                                        
+                        return new Token(m_cond_map[lexem], lexem, lexem);                                        
                     
                     else
-                        return new Token(ETokenId::IDENT, lexem);                   
+                        return new Token(ETokenId::IDENT, lexem, "ident");                   
                 }
             break;
             case 3:
@@ -227,7 +233,7 @@ Token* Scanner::next_token() {
                 } else {
                     m_state = 0;
                     regress();
-                    return new Token(ETokenId::NUMBER_INT, str_to_int(lexem));
+                    return new Token(ETokenId::NUMBER_INT, str_to_int(lexem), "numero_int");
                 }
             break;
             case 4:
@@ -244,7 +250,7 @@ Token* Scanner::next_token() {
                 else {
                     m_state = 0;
                     regress();
-                    return new Token(ETokenId::NUMBER_REAL, str_to_real(lexem));
+                    return new Token(ETokenId::NUMBER_REAL, str_to_real(lexem), "numero_real");
                 }
             break;
             case 5:
@@ -273,14 +279,14 @@ Token* Scanner::next_token() {
                         split_sci_not(lexem, e_pos, coef, exp);
 
                         if (lexem[e_pos + 1] == '+') {
-                            return new Token(ETokenId::NUMBER_REAL, std::pow(coef, exp));
+                            return new Token(ETokenId::NUMBER_REAL, std::pow(coef, exp), "numero_real");
                         } 
                         else {
-                            return new Token(ETokenId::NUMBER_REAL, std::pow(coef, -exp));
+                            return new Token(ETokenId::NUMBER_REAL, std::pow(coef, -exp), "numero_real");
                         }
                     }
                     
-                    return new Token(ETokenId::NUMBER_REAL, str_to_real(lexem));
+                    return new Token(ETokenId::NUMBER_REAL, str_to_real(lexem), "numero_real");
                 }
             break;
             case 8:
@@ -309,60 +315,69 @@ Token* Scanner::next_token() {
                         split_sci_not(lexem, e_pos, coef, exp);
 
                         if (lexem[e_pos + 1] == '+') {                                              
-                            return new Token(ETokenId::NUMBER_INT, (int)std::pow(coef, exp));
+                            return new Token(ETokenId::NUMBER_INT, (int)std::pow(coef, exp), "numero_int");
                         } 
                         else {
-                            return new Token(ETokenId::NUMBER_INT, (int)std::pow(coef, -exp));
+                            return new Token(ETokenId::NUMBER_INT, (int)std::pow(coef, -exp), "numero_int");
                         }
                     }
 
-                    return new Token(ETokenId::NUMBER_INT, str_to_int(lexem));
+                    return new Token(ETokenId::NUMBER_INT, str_to_int(lexem), "numero_int");
                 }                
             break;
             case 12:                
                 if (curr_char == '=') {
-                    m_state = 13;
-                    lexem += '=';                                        
+                    lexem += '=';
+                    m_state = 13;                    
                     break;
                 } else {
                     m_state = 0;
                     regress();                    
                     
-                    return new Token(ETokenId::SYMBOL, lexem);
+                    return new Token(ETokenId::SYMBOL, lexem, lexem);
                 }                
             break;
             case 13:
                 regress();
                 m_state = 0;
-                if (is_op(lexem)) {                    
-                    new Token(m_op_map[lexem], lexem);
-                }
 
-                throw std::runtime_error(error_message(lexem+curr_char));
+                if (is_op(lexem))
+                    return new Token(m_op_map[lexem], lexem, lexem);                
+
+                throw std::runtime_error(error_message(lexem));
             break;
-            case 14:
-                lexem += curr_char;
+            case 14:                
                 if (curr_char == '=') {
+                    lexem += curr_char;
                     m_state = 13;
                     break;
                 } else {
                     m_state = 0;
                     regress();
 
-                    return new Token(m_op_map[lexem], lexem);
+                    return new Token(m_op_map[lexem], lexem, lexem);
                 }
             break;
             case 16:
-                lexem += 1;
-                if (curr_char != '=' || curr_char != '>') {
+                if (curr_char == '=' || curr_char == '>') {                    
+                    lexem += curr_char;
+                    m_state = 13;
+                    break;
+                } else {
                     m_state = 0;
                     regress();
 
-                    return new Token(m_op_map[lexem], lexem);
-                } else {
-                    m_state = 13;
-                    break;
+                    return new Token(m_op_map[lexem], lexem, lexem);                  
                 }
+            break;
+            case 11:
+                m_state = 0;
+                regress();
+
+                if (is_symbol(lexem))
+                    return new Token(ETokenId::SYMBOL, lexem, lexem);
+                else
+                    throw std::runtime_error(error_message(lexem));
             break;
         }
     }
