@@ -37,7 +37,7 @@ struct Token {
         float m_float_attr;
         double m_real_attr;
         char* m_str_attr;
-    };        
+    };
     
     Token(){};
 

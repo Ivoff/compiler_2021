@@ -5,18 +5,48 @@
 #include <string>
 #include <exception>
 #include <stack>
+#include <map>
 
 #include "../../lexical_analyser/token.hpp"
 
+struct Attribute {
+    enum EAttrTipo {
+        INTEIRO = 0x200,
+        REAL,
+        STRING
+    };    
+    EAttrTipo m_type;
+    int m_int{0};
+    double m_real{0.0};
+    std::string m_str;
+    
+    Attribute(){};
+    
+    Attribute(EAttrTipo type, int int_attr) {
+        m_int = int_attr;
+        m_type = type;
+    }
+
+    Attribute(EAttrTipo type, double real_attr) {
+        m_real = real_attr;
+        m_type = type;
+    }
+
+    Attribute(EAttrTipo type, std::string str_attr) {
+        m_str = str_attr;
+        m_type = type;
+    }
+};
+
 struct Node {        
     std::string m_head;
+    bool m_checked {false};
     Node* m_parent {nullptr};
     Token* m_terminal {nullptr};
+    std::map<std::string, Attribute> m_attributes;
     std::vector<Node*>* m_node_list {nullptr}; // not a list LOL
     
-    Node(std::string head);
-    Node(std::string head, std::vector<Node*>* node_list);
-    Node(std::string head, Token* terminal);    
+    Node(std::string head);    
 };
 
 struct ParseTree {
@@ -30,7 +60,7 @@ struct ParseTree {
     void insert_node(std::string head);
     void print(Node* current_node, std::string level);
     void update_tree_info();
-    
+    void update_tree_info_post_order();    
 };
 
 #endif

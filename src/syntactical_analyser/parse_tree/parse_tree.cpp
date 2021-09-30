@@ -5,17 +5,6 @@ Node::Node(std::string head) {
     m_node_list = new std::vector<Node*>();
 };
 
-Node::Node(std::string head, std::vector<Node*>* node_list) {
-    m_head = head;
-    m_node_list = node_list;    
-};
-
-Node::Node(std::string head, Token* terminal) {
-    m_head = head;
-    m_terminal = terminal;
-    m_node_list = new std::vector<Node*>();
-};
-
 /**
  * @brief To append a newly created node as a child from m_current_node
  * 
@@ -55,25 +44,44 @@ void ParseTree::insert_node(std::string head) {
 
 void ParseTree::print(Node* current_node, std::string level) {    
     if (current_node->m_terminal != nullptr) {
-        printf("%s%s\n", level.c_str(), current_node->m_terminal->lexem_to_str().c_str());        
+        printf("%s%s -> %s\n", level.c_str(), current_node->m_head.c_str(), current_node->m_terminal->lexem_to_str().c_str());        
     }
     else
         printf("%s%s\n", level.c_str(), current_node->m_head.c_str());
         
     if (m_root->m_node_list->size() > 0) {
         for (auto el : *current_node->m_node_list) {
-            print(el, level + "--- ");
+            print(el, level + "|- ");
         }
     }
 }
 
-void ParseTree::update_tree_info() {    
+void ParseTree::update_tree_info() {
     if (m_current_node->m_node_list->size() > 1) {
         for (auto i = m_current_node->m_node_list->size()-1; i > 0; i -= 1) {
             m_tree_stack.push(m_current_node->m_node_list->at(i));
         }
         m_current_node = m_current_node->m_node_list->at(0);
     } else if (m_current_node->m_node_list->size()  == 1) {
+        //Se tamanho da lista de nós é 1 então current node é child
+        m_current_node = m_current_node->m_node_list->at(0);
+    }
+}
+
+void ParseTree::update_tree_info_post_order() {
+    if (m_current_node->m_node_list->size() > 1) {
+        for (auto i = m_current_node->m_node_list->size()-1; i > 0; i -= 1) {
+            m_tree_stack.push(m_current_node->m_node_list->at(i));
+        }
+        if (m_current_node->m_node_list->at(0)->m_node_list->size()) {
+            m_tree_stack.push(m_current_node->m_node_list->at(0));
+            m_current_node = m_current_node->m_node_list->at(0);
+        } 
+        else {
+            m_current_node = m_current_node->m_node_list->at(0);
+        }        
+    } 
+    else if (m_current_node->m_node_list->size() == 1) {
         //Se tamanho da lista de nós é 1 então current node é child
         m_current_node = m_current_node->m_node_list->at(0);
     }

@@ -1,4 +1,4 @@
-OBJS = src/*.*pp src/lexical_analyser/*.*pp src/syntactical_analyser/*.*pp src/syntactical_analyser/parse_tree/*.*pp
+OBJS = src/*.*pp src/lexical_analyser/*.*pp src/syntactical_analyser/*.*pp src/syntactical_analyser/parse_tree/*.*pp src/semantic_generator/*.*pp src/semantic_generator/symbol_table/*.*pp src/semantic_generator/semantic_actions_table/*.*pp
 INCLUDE_DIR = -Isrc
 CC = g++
 COMPILER_FLAGS = -w -g -std=c++11

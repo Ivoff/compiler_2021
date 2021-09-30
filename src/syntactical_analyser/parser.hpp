@@ -18,7 +18,7 @@ struct Parser {
     std::stack<std::string> m_parse_stack;
     
     Parser(std::string file_path);
-    void parse();
+    ParseTree* parse();
     
     private:
         std::string sintax_error(std::string expected);
