@@ -11,7 +11,7 @@
 
 struct Attribute {
     enum EAttrTipo {
-        INTEIRO = 0x200,
+        INTEGER = 0x200,
         REAL,
         STRING
     };    
@@ -35,6 +35,18 @@ struct Attribute {
     Attribute(EAttrTipo type, std::string str_attr) {
         m_str = str_attr;
         m_type = type;
+    };
+
+    std::string to_string() {
+        if (m_type == Attribute::INTEGER) {
+            return std::to_string(m_int);
+        } 
+        else if (m_type == Attribute::REAL) {
+            return std::to_string(m_real);
+        } 
+        else {
+            return m_str;
+        }
     }
 };
 
