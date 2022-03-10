@@ -12,6 +12,6 @@ void SymbolTable::add_entry(std::string name, std::string type) {
         throw std::runtime_error("Semantic Error: variable \"" + name + "\" is already defined");
     }
     else {
-        m_table.insert({name, Symbol(name, aux_type )});
+        m_table.insert({name, std::make_pair(Symbol(name, aux_type), "")});
     }
 }

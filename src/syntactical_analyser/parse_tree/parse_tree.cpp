@@ -53,14 +53,17 @@ void ParseTree::insert_node(std::string head) {
 }
 
 void ParseTree::print_attr(Node* current_node, std::string level) {
-    if (current_node->m_terminal != nullptr) {
+    if (current_node->m_terminal != nullptr) 
+    {
         printf("%s%s -> %s\n", level.c_str(), current_node->m_head.c_str(), current_node->m_terminal->lexem_to_str().c_str());        
     }
     else {
         printf("%s%s\n", level.c_str(), current_node->m_head.c_str());
-        if (!current_node->m_attributes.empty()) {
-            for(auto itr =  current_node->m_attributes.begin(); itr != current_node->m_attributes.end(); ++itr) {
-                printf("%s[attr] %s.%s = %s\n", level.c_str(), current_node->m_head.c_str(), itr->first.c_str(), itr->second.to_string().c_str());
+        if (!current_node->m_attributes.empty()) 
+        {
+            for(auto itr =  current_node->m_attributes.begin(); itr != current_node->m_attributes.end(); ++itr) 
+            {
+                printf("%s[attr] %s.%s = %s (%s)\n", level.c_str(), current_node->m_head.c_str(), itr->first.c_str(), itr->second.to_string().c_str(), itr->second.type_to_string().c_str());
             }            
         }
     }

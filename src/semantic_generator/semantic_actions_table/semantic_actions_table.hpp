@@ -37,6 +37,7 @@ struct SemanticActions {
     void action_outros_termos(Node* cur_node);
     void action_outros_termos_POST_op_ad(Node* cur_node);
     void action_outros_termos_POST_termo(Node* cur_node);
+    void action_comandos_POST_comando(Node* cur_node);
 
     SemanticActions(SymbolTable* sym_table, CodeGenerator* code_gen);    
 };
@@ -68,6 +69,7 @@ struct SemanticActionsTable {
         {"<outros_termos>", &SemanticActions::action_expressao_POST_termo},
         {"<outros_termos>", &SemanticActions::action_outros_termos_POST_termo},
         {"<termo>", &SemanticActions::action_outros_termos_POST_op_ad},        
+        {"<mais_comandos>", &SemanticActions::action_comandos_POST_comando},
         {"&", &SemanticActions::action_outros_termos}        
     };    
 

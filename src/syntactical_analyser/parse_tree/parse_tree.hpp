@@ -38,14 +38,26 @@ struct Attribute {
     };
 
     std::string to_string() {
-        if (m_type == Attribute::INTEGER) {
+        if (m_type == Attribute::INTEGER && m_int) {
             return std::to_string(m_int);
         } 
-        else if (m_type == Attribute::REAL) {
+        else if (m_type == Attribute::REAL && m_real)   {
             return std::to_string(m_real);
         } 
         else {
             return m_str;
+        }
+    }
+
+    std::string type_to_string() {
+        if (m_type == Attribute::INTEGER) {
+            return "integer";
+        } 
+        else if (m_type == Attribute::REAL) {
+            return "real";
+        } 
+        else {
+            return "string";
         }
     }
 };
