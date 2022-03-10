@@ -35,6 +35,9 @@ struct Attribute {
     Attribute(EAttrTipo type, std::string str_attr) {
         m_str = str_attr;
         m_type = type;
+        // só pra garantir, porque arrumar vai dar trabalho de mais
+        m_int = 0;
+        m_real = 0;
     };
 
     std::string to_string() {

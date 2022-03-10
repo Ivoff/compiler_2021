@@ -19,6 +19,13 @@ struct Symbol {
         m_name = name;
         m_type = type;
     }
+
+    std::string type_to_string() {
+        if (m_type == EType::INTEGER)
+            return "integer";
+        else
+            return "real";
+    }
 };
 
 struct SymbolTable {
@@ -27,6 +34,7 @@ struct SymbolTable {
 
     SymbolTable(){};
     void add_entry(std::string name, std::string type);
+    void print_table();
 };
 
 struct Scope {    

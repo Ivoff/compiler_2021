@@ -57,8 +57,10 @@ void ParseTree::print_attr(Node* current_node, std::string level) {
     {
         printf("%s%s -> %s\n", level.c_str(), current_node->m_head.c_str(), current_node->m_terminal->lexem_to_str().c_str());        
     }
-    else {
+    else 
+    {
         printf("%s%s\n", level.c_str(), current_node->m_head.c_str());
+        
         if (!current_node->m_attributes.empty()) 
         {
             for(auto itr =  current_node->m_attributes.begin(); itr != current_node->m_attributes.end(); ++itr) 
@@ -68,7 +70,8 @@ void ParseTree::print_attr(Node* current_node, std::string level) {
         }
     }
             
-    for (auto el : *current_node->m_node_list) {
+    for (auto el : *current_node->m_node_list) 
+    {
         print_attr(el, level + "|- ");        
     }    
 }

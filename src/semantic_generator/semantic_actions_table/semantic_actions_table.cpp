@@ -83,7 +83,7 @@ void SemanticActions::action_fator(Node* cur_node) {
             else 
             {
                 // erro
-                printf("variável %s não existe\n", lexem.c_str());
+                printf("[ERRO] variável %s não existe\n", lexem.c_str());
                 std::exit(0);
             }                        
         }
@@ -293,10 +293,29 @@ void SemanticActions::action_outros_termos(Node* cur_node) {
 }
 
 void SemanticActions::action_comandos_POST_comando(Node* cur_node) {
-    if (cur_node->sibling(0)->m_node_list->at(0)->m_head == "ident") {
-        ParseTree::print_attr(cur_node->sibling(0), "");
-        m_code_gen->print();
-        std::exit(0);
+    if (cur_node->sibling(0)->m_node_list->at(1)->m_head == ":=") 
+    {
+        auto ident = cur_node->sibling(0)->m_node_list->at(0)->m_terminal->lexem_to_str();
+        auto expression = cur_node->sibling(0)->m_node_list->at(2);
+
+        if (m_symbol_table->m_table.count(ident)) 
+        {
+            // depois de tanto código horizontalmente longo, desisto de economizar declaração de variável
+            auto var_type = m_symbol_table->m_table[ident].first.type_to_string();
+            auto expression_type = expression->m_attributes["syn"].type_to_string();
+
+            if (var_type == expression_type) 
+            {
+                m_symbol_table->m_table[ident].second = expression->m_attributes["syn"].to_string();
+            }
+            else 
+            {
+                printf("[ERRO] variável %s não corresponde ao tipo de %s\n", ident.c_str(), expression->m_attributes["syn"].to_string());
+            }
+        }
+        else {
+            printf("[ERRO] variável %s não declarada\n", ident.c_str());
+        }                
     }    
 }
 

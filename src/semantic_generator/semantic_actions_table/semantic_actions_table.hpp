@@ -14,6 +14,8 @@ struct SemanticActions {
 
     SymbolTable* m_symbol_table;
     CodeGenerator* m_code_gen;
+    
+    // the true buffer
     std::stack<
         std::pair<std::pair<void(SemanticActions::*)(Node*), Node*>, std::string>
     > m_rightmost_actions;
