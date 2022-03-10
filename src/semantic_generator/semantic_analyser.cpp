@@ -25,8 +25,10 @@ void SemanticAnalyser::analise() {
             }
             // printf("%s\n", cur_node->m_head.c_str());
 
-            m_action_table->execute_action(cur_node->m_head, cur_node);
-            m_action_table->execute_rightmost_actions();
+            m_action_table->execute_rightmost_actions(cur_node->m_head);
+            m_action_table->execute_action(cur_node->m_head, cur_node);            
         }
     }
+
+    m_parse_tree->print_attr(m_parse_tree->m_root, "");
 }

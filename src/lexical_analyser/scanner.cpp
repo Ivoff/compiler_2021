@@ -89,28 +89,28 @@ char Scanner::regress() {
 
 double Scanner::str_to_real(std::string input) {
     size_t dot_index = (char)input.find('.');
-    int acc = 1;    
+    int acc = 1;
     int fraction_part = 0;
-    int integer_part = 0;                    
-    int denominator;                        
+    int integer_part = 0;
+    int denominator;
 
-    for(int i = input.size()-1; i > dot_index; i -= 1) {        
+    for(int i = input.size()-1; i > dot_index; i -= 1) {
         fraction_part += (input[i]-'0') * acc;
         acc *= 10;
-    }    
+    }
 
     acc = 1;
-    for(int i = dot_index-1; i >= 0; i -= 1) {        
+    for(int i = dot_index-1; i >= 0; i -= 1) {
         integer_part += (input[i]-'0') * acc;
         acc *= 10;
-    }    
+    }
 
     return integer_part + fraction_part / std::pow(10, (int)std::log10(fraction_part) + 1);
 }
 
 int Scanner::str_to_int(std::string input) {    
-    int acc = 1;        
-    int integer_part = 0;        
+    int acc = 1;
+    int integer_part = 0;
 
     for(int i = input.size()-1; i >= 0; i -= 1) {
         integer_part += (input[i]-'0') * acc;
@@ -120,8 +120,8 @@ int Scanner::str_to_int(std::string input) {
     return integer_part;
 }
 
-void Scanner::split_sci_not(const std::string& input, int e_pos, double& coef, int& exp) {            
-    if (e_pos != std::string::npos) {        
+void Scanner::split_sci_not(const std::string& input, int e_pos, double& coef, int& exp) {
+    if (e_pos != std::string::npos) {
         coef = input.find('.') != std::string::npos ? 
             str_to_real(input.substr(0, e_pos)) : 
             str_to_int(input.substr(0, e_pos));

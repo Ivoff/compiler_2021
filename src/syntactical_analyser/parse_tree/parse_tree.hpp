@@ -59,6 +59,7 @@ struct Node {
     std::vector<Node*>* m_node_list {nullptr}; // not a list LOL
     
     Node(std::string head);    
+    Node* sibling(int index);
 };
 
 struct ParseTree {
@@ -71,6 +72,7 @@ struct ParseTree {
     void insert_node(Node* new_node);
     void insert_node(std::string head);
     void print(Node* current_node, std::string level);
+    static void print_attr(Node* current_node, std::string level);
     void update_tree_info();
     void update_tree_info_post_order();    
 };

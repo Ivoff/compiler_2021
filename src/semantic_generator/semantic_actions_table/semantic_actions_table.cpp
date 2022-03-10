@@ -10,8 +10,7 @@ void SemanticActions::action_tipo_var(Node* cur_node) {
      * <tipo_var> -> real {<tipo_var>.syn = "real"}
      * <tipo_var> -> integer {<tipo_var>.syn = "real"}
      */    
-    if ((cur_node->m_head == "real" || cur_node->m_head == "integer") && cur_node->m_parent->m_head == "<tipo_var>") {
-        // printf("action_tipo_var\n");
+    if ((cur_node->m_head == "real" || cur_node->m_head == "integer") && cur_node->m_parent->m_head == "<tipo_var>") {        
         cur_node->m_parent->m_attributes["syn"] = Attribute(Attribute::STRING, cur_node->m_terminal->lexem_to_str());
     }
 };
@@ -22,8 +21,7 @@ void SemanticActions::action_dc_v(Node* cur_node) {
             : 
             <variaveis>
     */    
-    if (cur_node->m_head == ":" && cur_node->m_parent->m_head == "<dc_v>") {        
-        // printf("action_dc_v\n");
+    if (cur_node->m_head == ":" && cur_node->m_parent->m_head == "<dc_v>") {                
         cur_node->m_parent->m_node_list->at(2)->m_attributes["inh"] = Attribute(Attribute::STRING, cur_node->m_parent->m_node_list->at(0)->m_attributes["syn"].m_str);
     }
 };
@@ -35,10 +33,9 @@ void SemanticActions::action_variaveis(Node* cur_node) {
                         addCode("ALME", "0.0", "", ident.syn);
                         <mais_var>.inh = <variaveis>.inh
                      }
-               <mais_var>     
+                <mais_var>     
      */    
-    if (cur_node->m_head == "<mais_var>" && cur_node->m_parent->m_head == "<variaveis>") {        
-        // printf("action_variaveis\n");
+    if (cur_node->m_head == "<mais_var>" && cur_node->m_parent->m_head == "<variaveis>") {                
         std::string ident_syn = cur_node->m_parent->m_node_list->at(0)->m_terminal->lexem_to_str();        
         std::string variaveis_inh = cur_node->m_parent->m_attributes["inh"].m_str;                        
         
@@ -56,16 +53,14 @@ void SemanticActions::action_mais_var(Node* cur_node) {
     /*
     <mais_var> -> , {<variaveis>.inh = <mais_var>.inh} <variaveis>
     */    
-    if (cur_node->m_head == "," && cur_node->m_parent->m_head == "<mais_var>") {        
-        // printf("action_mais_var\n");
+    if (cur_node->m_head == "," && cur_node->m_parent->m_head == "<mais_var>") {                
         cur_node->m_parent->m_node_list->at(1)->m_attributes["inh"] = Attribute(Attribute::STRING, cur_node->m_parent->m_attributes["inh"].m_str);
     }
 };
 
 void SemanticActions::action_comando(Node* cur_node) {    
     std::string op = cur_node->m_parent->m_node_list->at(0)->m_head;
-    if (cur_node->m_head == ")" && (op == "read" || op == "write")) {
-        // printf("action_comando\n");
+    if (cur_node->m_head == ")" && (op == "read" || op == "write")) {        
         std::string ident_syn = cur_node->m_parent->m_node_list->at(2)->m_terminal->lexem_to_str();        
         m_code_gen->add_code(op, "", "", ident_syn);
     }
@@ -73,8 +68,7 @@ void SemanticActions::action_comando(Node* cur_node) {
 };
 
 void SemanticActions::action_fator(Node* cur_node) {    
-    if (cur_node->m_parent->m_head == "<fator>") {
-        // printf("action_fator\n");
+    if (cur_node->m_parent->m_head == "<fator>") {        
         Node* fator_node = cur_node->m_parent;
         if (cur_node->m_head == "ident") {
             fator_node->m_attributes["syn"] = Attribute(Attribute::STRING, cur_node->m_terminal->lexem_to_str());            
@@ -95,49 +89,67 @@ void SemanticActions::action_termo_POST_op_un(Node* cur_node) {
     /*
     <termo> -> <op_un> { <fator>.inh = <op_un>.val }
     */
-    if (cur_node->m_head == "<fator>" && cur_node->m_parent->m_head == "<termo>") {
-        // printf("action_termo_POST_op_un\n");
+    if (cur_node->m_head == "<fator>" && cur_node->m_parent->m_head == "<termo>") {        
         int aux = cur_node->m_parent->m_node_list->at(0)->m_node_list->at(0)->m_head == "-" ? -1 : 1;
         cur_node->m_attributes["inh"] = Attribute(Attribute::INTEGER, aux);
     }
 };
 
 void SemanticActions::action_termo_POST_fator(Node* cur_node) {    
-    if (cur_node->m_head == "<mais_fatores>") {
-        // printf("action_termo_POST_fator\n");
-        Node* fator_node = cur_node->m_parent->m_node_list->at(1);
-        cur_node->m_attributes["inh"] = Attribute(Attribute::STRING, fator_node->m_attributes["inh"].m_int > 0 ? fator_node->m_attributes["syn"].m_str : "(-"+fator_node->m_attributes["syn"].m_str+")");        
-
-        m_rightmost_actions.push(std::pair<void(SemanticActions::*)(Node*), Node*>(&SemanticActions::action_termo_POST_mais_fatores, cur_node->m_parent));
+    if (cur_node->m_head == "<mais_fatores>" && cur_node->m_parent->m_head == "<termo>") {        
+        Node* fator_node = cur_node->sibling(1);
+        
+        cur_node->m_attributes["inh"] = Attribute(
+            Attribute::STRING, 
+            fator_node->m_attributes["inh"].m_int > 0 ? 
+                fator_node->m_attributes["syn"].to_string() : 
+                "(-"+fator_node->m_attributes["syn"].to_string()+")"
+        );
+         
+        m_rightmost_actions.push(
+            std::make_pair(
+                std::make_pair(
+                    &SemanticActions::action_termo_POST_mais_fatores, 
+                    cur_node->m_parent
+                ), 
+                "<outros_termos>"
+            )
+        );
     }
 };
 
 void SemanticActions::action_op_mul(Node* cur_node) {    
-    if ((cur_node->m_head == "*" || cur_node->m_head == "/") && cur_node->m_parent->m_head == "<op_mul>") {
-        // printf("action_op_mul\n");
+    if ((cur_node->m_head == "*" || cur_node->m_head == "/") && cur_node->m_parent->m_head == "<op_mul>") {        
         cur_node->m_parent->m_attributes["lexval"] = Attribute(Attribute::STRING, cur_node->m_terminal->lexem_to_str());
     }
 };
 
 void SemanticActions::action_mais_fatores_POST_fator(Node* cur_node) {    
-    if (cur_node->m_head == "<mais_fatores>" && cur_node->m_parent->m_head == "<mais_fatores>") {
-        // printf("action_mais_fatores_POST_fator\n");
-        Node* fator_node = cur_node->m_parent->m_node_list->at(1);        
-        cur_node->m_attributes["inh"] = Attribute(Attribute::STRING, fator_node->m_attributes["syn"].m_str);        
+    if (cur_node->m_head == "<mais_fatores>" && cur_node->m_parent->m_head == "<mais_fatores>") {        
+        Node* fator_node = cur_node->sibling(1);        
+        
+        cur_node->m_attributes["inh"] = Attribute(Attribute::STRING,fator_node->m_attributes["syn"].to_string());
+
+        m_rightmost_actions.push(
+            std::make_pair(
+                std::make_pair(
+                    &SemanticActions::action_mais_fatores, 
+                    cur_node
+                ), 
+                "<outros_termos>"
+            )
+        );
+    } 
+    
+    if (cur_node->m_head == "<mais_fatores>" && cur_node->m_node_list->at(0)->m_head == "&") {
+        cur_node->m_attributes["syn"] = cur_node->m_attributes["inh"];
     }
 };
 
 void SemanticActions::action_mais_fatores(Node* cur_node) {        
-    if (cur_node->m_head == "&" && cur_node->m_parent->m_head == "<mais_fatores>") {
-        // printf("action_mais_fatores\n");
-        Node* mais_fatores_parent = cur_node->m_parent->m_parent;
-        Node* mais_fatores_child = cur_node->m_parent;
-
-        // <mais_fatores> -> &        
-        mais_fatores_child->m_attributes["syn"] = mais_fatores_child->m_attributes["inh"];
-        if (mais_fatores_parent->m_head != "<mais_fatores>") {
-            return;
-        }
+    if (cur_node->m_head == "<mais_fatores>" && cur_node->m_parent->m_head == "<mais_fatores>") {
+        Node* mais_fatores_parent = cur_node->m_parent;
+        Node* mais_fatores_child = cur_node;        
         
         /* <mais_fatores> -> <op_mul><fator><mais_fatores> {
                 <mais_fatores>.syn = geraTemp();
@@ -155,32 +167,38 @@ void SemanticActions::action_mais_fatores(Node* cur_node) {
     }    
 };
 
-void SemanticActions::action_termo_POST_mais_fatores(Node* cur_node) {    
-    if (cur_node->m_head == "<termo>") {
-        // printf("action_termo_POST_mais_fatores\n");
+void SemanticActions::action_termo_POST_mais_fatores(Node* cur_node) {        
+    if (cur_node->m_head == "<termo>") {        
         cur_node->m_attributes["syn"] = cur_node->m_node_list->at(2)->m_attributes["syn"];
     }
 };
 
 void SemanticActions::action_op_ad(Node* cur_node) {    
-    if ((cur_node->m_head == "+" || cur_node->m_head == "-") && cur_node->m_parent->m_head == "<op_ad>") {
-        // printf("action_op_ad\n");
+    if ((cur_node->m_head == "+" || cur_node->m_head == "-") && cur_node->m_parent->m_head == "<op_ad>") {        
         cur_node->m_parent->m_attributes["lexval"] = Attribute(Attribute::STRING, cur_node->m_terminal->lexem_to_str());
     }
 };
 
-void SemanticActions::action_expressao_POST_termo(Node* cur_node) {    
+void SemanticActions::action_expressao_POST_termo(Node* cur_node) {
     if (cur_node->m_head == "<outros_termos>" && cur_node->m_parent->m_head == "<expressao>") {
-        // printf("action_expression_POST_termo\n");
-        cur_node->m_attributes["inh"] = cur_node->m_parent->m_node_list->at(1)->m_attributes["syn"];
+        cur_node->m_attributes["inh"] = cur_node->sibling(0)->m_attributes["syn"];
     }
-
-    m_rightmost_actions.push(std::pair<m_action_function, Node*>(&SemanticActions::action_expressao_POST_outros_termos, cur_node->m_parent));
 };
 
+void SemanticActions::action_outros_termos_POST_op_ad(Node* cur_node) {
+    if (cur_node->m_head == "<termo>" && cur_node->m_parent->m_head == "<outros_termos>") {
+        auto op_ad = cur_node->sibling(0);
+        auto outros_termos = cur_node->m_parent;
+
+        outros_termos->m_attributes["op"] = op_ad->m_attributes["lexval"];
+
+        ParseTree::print_attr(outros_termos, "");
+        std::exit(0);
+    }
+}
+
 void SemanticActions::action_outros_termos_POST_termo(Node* cur_node) {    
-    if (cur_node->m_head == "<outros_termos>" && cur_node->m_parent->m_head == "<outros_termos>") {
-        // printf("action_outros_termos_POST_termo\n");
+    if (cur_node->m_head == "<outros_termos>" && cur_node->m_parent->m_head == "<outros_termos>") {        
         cur_node->m_attributes["inh"] = Attribute(Attribute::STRING, m_code_gen->gen_temp());
         m_code_gen->add_code(
             cur_node->m_parent->m_node_list->at(0)->m_attributes["lexval"].m_str,
@@ -193,27 +211,19 @@ void SemanticActions::action_outros_termos_POST_termo(Node* cur_node) {
 };
 
 void SemanticActions::action_expressao_POST_outros_termos(Node* cur_node) {    
-    if(cur_node->m_head == "<expressao>") {
-        // printf("action_expressao_POST_outros_termos\n");
+    if(cur_node->m_head == "<expressao>") {        
         cur_node->m_attributes["syn"] = cur_node->m_node_list->at(1)->m_attributes["syn"];
     }
 }
 
 void SemanticActions::action_outros_termos(Node* cur_node) {    
-    if (cur_node->m_head == "&" && cur_node->m_parent->m_head == "<outros_termos>") {
-        // printf("action_outros_termos\n");
+    if (cur_node->m_head == "&" && cur_node->m_parent->m_head == "<outros_termos>") {        
         Node* outros_termos_parent = cur_node->m_parent->m_parent;
         Node* outros_termos_child = cur_node->m_parent;
-
-        // printf("%s\n", outros_termos_child->m_attributes["inh"].m_str.c_str());        
-        // outros_termos_child->m_attributes["syn"] = outros_termos_child->m_attributes["inh"];
+                        
         if (outros_termos_parent->m_head != "<outros_termos>") {
             return;
         }
-        // printf("%s\n", outros_termos_parent->m_node_list->at(2)->m_attributes["inh"].m_str.c_str());
-        // outros_termos_parent->m_attributes["syn"] = outros_termos_child->m_attributes["syn"];
-        // outros_termos_parent->m_attributes["syn"] = outros_termos_child->m_attributes["inh"];
-        
     }
 }
 
@@ -228,18 +238,24 @@ void SemanticActionsTable::execute_action(std::string head, Node* cur_node) {
         auto result = m_actions_table.equal_range(head);
         for(auto it = result.first; it != result.second; it ++) {
             (m_actions->*(it->second))(cur_node);
-        }
-        // (m_actions->*(m_actions_table.find(head)->second))(cur_node);
+        }        
     } 
     else {
         // printf("ação gramatical não encontrada\n");
     }
 };
 
-void SemanticActionsTable::execute_rightmost_actions() {
+void SemanticActionsTable::execute_rightmost_actions(std::string cur_head) {
     while(!m_actions->m_rightmost_actions.empty()) {
-        std::pair<void(SemanticActions::*)(Node*), Node*> fun_node =  m_actions->m_rightmost_actions.front();
-        (m_actions->*(fun_node.first))(fun_node.second);
-        m_actions->m_rightmost_actions.pop();
+        auto top = m_actions->m_rightmost_actions.top();        
+        if (top.second == cur_head) {
+            m_actions->m_rightmost_actions.pop();
+            (m_actions->*(top.first.first))(top.first.second);                        
+        } else {
+            break;
+        }
+        // std::pair<void(SemanticActions::*)(Node*), Node*> fun_node =  m_actions->m_rightmost_actions.front();
+        // (m_actions->*(fun_node.first))(fun_node.second);
+        // m_actions->m_rightmost_actions.pop();
     }
 };

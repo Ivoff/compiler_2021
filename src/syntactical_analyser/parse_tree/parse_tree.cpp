@@ -6,6 +6,16 @@ Node::Node(std::string head) {
 };
 
 /**
+ * @brief index from father POV
+ * 
+ * @param index 
+ * @return Node* 
+ */
+Node* Node::sibling(int index) {
+    return m_parent->m_node_list->at(index);
+}
+
+/**
  * @brief To append a newly created node as a child from m_current_node
  * 
  * @param new_node 
@@ -40,6 +50,24 @@ void ParseTree::insert_node(std::string head) {
     } else {
         throw std::runtime_error("Node atual null");
     }
+}
+
+void ParseTree::print_attr(Node* current_node, std::string level) {
+    if (current_node->m_terminal != nullptr) {
+        printf("%s%s -> %s\n", level.c_str(), current_node->m_head.c_str(), current_node->m_terminal->lexem_to_str().c_str());        
+    }
+    else {
+        printf("%s%s\n", level.c_str(), current_node->m_head.c_str());
+        if (!current_node->m_attributes.empty()) {
+            for(auto itr =  current_node->m_attributes.begin(); itr != current_node->m_attributes.end(); ++itr) {
+                printf("%s[attr] %s.%s = %s\n", level.c_str(), current_node->m_head.c_str(), itr->first.c_str(), itr->second.to_string().c_str());
+            }            
+        }
+    }
+            
+    for (auto el : *current_node->m_node_list) {
+        print_attr(el, level + "|- ");        
+    }    
 }
 
 void ParseTree::print(Node* current_node, std::string level) {    

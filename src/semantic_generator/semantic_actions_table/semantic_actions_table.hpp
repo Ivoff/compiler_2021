@@ -4,7 +4,6 @@
 #include <map>
 #include <string>
 #include <exception>
-#include <queue>
 
 #include "../../syntactical_analyser/parse_tree/parse_tree.hpp"
 #include "../symbol_table/symbol_table.hpp"
@@ -15,11 +14,8 @@ struct SemanticActions {
 
     SymbolTable* m_symbol_table;
     CodeGenerator* m_code_gen;
-    std::queue<
-        std::pair<
-            void(SemanticActions::*)(Node*), 
-            Node*
-        >
+    std::stack<
+        std::pair<std::pair<void(SemanticActions::*)(Node*), Node*>, std::string>
     > m_rightmost_actions;
 
     void action_tipo_var(Node* cur_node);
@@ -28,20 +24,21 @@ struct SemanticActions {
     void action_mais_var(Node* cur_node);
     void action_comando(Node* cur_node);
     void action_fator(Node* cur_node);
-    // void action_op_un(Node* cur_node);
     void action_termo_POST_op_un(Node* cur_node);
     void action_termo_POST_fator(Node* cur_node);
     void action_termo_POST_mais_fatores(Node* cur_node);
     void action_op_mul(Node* cur_node);
     void action_mais_fatores_POST_fator(Node* cur_node);
     void action_mais_fatores(Node* cur_node);
+    void action_mais_fatores_POST_mais_fatores(Node* cur_node);
     void action_op_ad(Node* cur_node);
-    void action_outros_termos_POST_termo(Node* cur_node);
     void action_expressao_POST_termo(Node* cur_node);
     void action_expressao_POST_outros_termos(Node* cur_node);
     void action_outros_termos(Node* cur_node);
+    void action_outros_termos_POST_op_ad(Node* cur_node);
+    void action_outros_termos_POST_termo(Node* cur_node);
 
-    SemanticActions(SymbolTable* sym_table, CodeGenerator* code_gen);
+    SemanticActions(SymbolTable* sym_table, CodeGenerator* code_gen);    
 };
 
 typedef void(SemanticActions::*action_function)(Node*);
@@ -60,12 +57,9 @@ struct SemanticActionsTable {
         {")", &SemanticActions::action_comando},
         {"ident", &SemanticActions::action_fator},
         {"numero_int", &SemanticActions::action_fator},
-        {"numero_real", &SemanticActions::action_fator},        
-        // {")", &SemanticActions::action_fator},
-        // {"-", &SemanticActions::action_op_un},
-        // {"&", &SemanticActions::action_op_un},
+        {"numero_real", &SemanticActions::action_fator},                
         {"<fator>", &SemanticActions::action_termo_POST_op_un},
-        {"<mais_fatores>", &SemanticActions::action_termo_POST_fator},
+        {"<mais_fatores>", &SemanticActions::action_termo_POST_fator},        
         {"*", &SemanticActions::action_op_mul},
         {"/", &SemanticActions::action_op_mul},
         {"<mais_fatores>", &SemanticActions::action_mais_fatores_POST_fator},
@@ -73,12 +67,13 @@ struct SemanticActionsTable {
         {"+", &SemanticActions::action_op_ad},        
         {"<outros_termos>", &SemanticActions::action_expressao_POST_termo},
         {"<outros_termos>", &SemanticActions::action_outros_termos_POST_termo},
-        {"&", &SemanticActions::action_outros_termos}
+        {"<termo>", &SemanticActions::action_outros_termos_POST_op_ad},        
+        {"&", &SemanticActions::action_outros_termos}        
     };    
 
     SemanticActionsTable(SymbolTable* symbol_table, CodeGenerator* code_gen);
     void execute_action(std::string head, Node* cur_node);
-    void execute_rightmost_actions();
+    void execute_rightmost_actions(std::string cur_head);
 };
 
 #endif
