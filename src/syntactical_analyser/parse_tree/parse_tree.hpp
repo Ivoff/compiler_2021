@@ -8,31 +8,27 @@
 #include <map>
 
 #include "../../lexical_analyser/token.hpp"
+#include "../../misc/type.hpp"
 
-struct Attribute {
-    enum EAttrTipo {
-        INTEGER = 0x200,
-        REAL,
-        STRING
-    };    
-    EAttrTipo m_type;
+struct Attribute {    
+    EType m_type;
     int m_int{0};
     double m_real{0.0};
     std::string m_str;
     
     Attribute(){};
     
-    Attribute(EAttrTipo type, int int_attr) {
+    Attribute(EType type, int int_attr) {
         m_int = int_attr;
         m_type = type;
     }
 
-    Attribute(EAttrTipo type, double real_attr) {
+    Attribute(EType type, double real_attr) {
         m_real = real_attr;
         m_type = type;
     }
 
-    Attribute(EAttrTipo type, std::string str_attr) {
+    Attribute(EType type, std::string str_attr) {
         m_str = str_attr;
         m_type = type;
         // só pra garantir, porque arrumar vai dar trabalho de mais
@@ -41,10 +37,10 @@ struct Attribute {
     };
 
     std::string to_string() {
-        if (m_type == Attribute::INTEGER && m_int) {
+        if (m_type == EType::INTEGER && m_int) {
             return std::to_string(m_int);
         } 
-        else if (m_type == Attribute::REAL && m_real)   {
+        else if (m_type == EType::REAL && m_real)   {
             return std::to_string(m_real);
         } 
         else {
@@ -53,10 +49,10 @@ struct Attribute {
     }
 
     std::string type_to_string() {
-        if (m_type == Attribute::INTEGER) {
+        if (m_type == EType::INTEGER) {
             return "integer";
         } 
-        else if (m_type == Attribute::REAL) {
+        else if (m_type == EType::REAL) {
             return "real";
         } 
         else {
@@ -75,6 +71,7 @@ struct Node {
     
     Node(std::string head);    
     Node* sibling(int index);
+    Node* child(int index);
 };
 
 struct ParseTree {

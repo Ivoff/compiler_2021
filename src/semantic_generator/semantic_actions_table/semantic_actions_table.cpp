@@ -11,7 +11,7 @@ void SemanticActions::action_tipo_var(Node* cur_node) {
      * <tipo_var> -> integer {<tipo_var>.syn = "real"}
      */    
     if ((cur_node->m_head == "real" || cur_node->m_head == "integer") && cur_node->m_parent->m_head == "<tipo_var>") {        
-        cur_node->m_parent->m_attributes["syn"] = Attribute(Attribute::STRING, cur_node->m_terminal->lexem_to_str());
+        cur_node->m_parent->m_attributes["syn"] = Attribute(EType::STRING, cur_node->m_terminal->lexem_to_str());
     }
 };
 
@@ -22,7 +22,7 @@ void SemanticActions::action_dc_v(Node* cur_node) {
             <variaveis>
     */    
     if (cur_node->m_head == ":" && cur_node->m_parent->m_head == "<dc_v>") {                
-        cur_node->m_parent->m_node_list->at(2)->m_attributes["inh"] = Attribute(Attribute::STRING, cur_node->m_parent->m_node_list->at(0)->m_attributes["syn"].m_str);
+        cur_node->m_parent->m_node_list->at(2)->m_attributes["inh"] = Attribute(EType::STRING, cur_node->m_parent->m_node_list->at(0)->m_attributes["syn"].m_str);
     }
 };
 
@@ -39,13 +39,13 @@ void SemanticActions::action_variaveis(Node* cur_node) {
         std::string ident_syn = cur_node->m_parent->m_node_list->at(0)->m_terminal->lexem_to_str();        
         std::string variaveis_inh = cur_node->m_parent->m_attributes["inh"].m_str;                        
         
-        m_symbol_table->add_entry(ident_syn, variaveis_inh);
+        m_symbol_table->add_entry(Symbol(ident_syn, variaveis_inh));
         if (variaveis_inh == "real")
             m_code_gen->add_code("ALME", "0.0", "", ident_syn);
         else
             m_code_gen->add_code("ALME", "0", "", ident_syn);
 
-        cur_node->m_attributes["inh"] = Attribute(Attribute::STRING, variaveis_inh);
+        cur_node->m_attributes["inh"] = Attribute(EType::STRING, variaveis_inh);
     }
 };
 
@@ -54,7 +54,7 @@ void SemanticActions::action_mais_var(Node* cur_node) {
     <mais_var> -> , {<variaveis>.inh = <mais_var>.inh} <variaveis>
     */    
     if (cur_node->m_head == "," && cur_node->m_parent->m_head == "<mais_var>") {                
-        cur_node->m_parent->m_node_list->at(1)->m_attributes["inh"] = Attribute(Attribute::STRING, cur_node->m_parent->m_attributes["inh"].m_str);
+        cur_node->m_parent->m_node_list->at(1)->m_attributes["inh"] = Attribute(EType::STRING, cur_node->m_parent->m_attributes["inh"].m_str);
     }
 };
 
@@ -77,7 +77,7 @@ void SemanticActions::action_fator(Node* cur_node) {
         {
             if (m_symbol_table->m_table.count(lexem)) 
             {
-                auto attr_type = m_symbol_table->m_table[lexem].first.m_type == Symbol::INTEGER ? Attribute::INTEGER : Attribute::REAL;
+                auto attr_type = m_symbol_table->m_table[lexem].first.m_type;
                 fator_node->m_attributes["syn"] = Attribute(attr_type, lexem);
             } 
             else 
@@ -89,11 +89,11 @@ void SemanticActions::action_fator(Node* cur_node) {
         }
         else if (cur_node->m_head == "numero_int") 
         {
-            fator_node->m_attributes["syn"] = Attribute(Attribute::INTEGER, cur_node->m_terminal->lexem_to_str());
+            fator_node->m_attributes["syn"] = Attribute(EType::INTEGER, cur_node->m_terminal->lexem_to_str());
         }
         else if (cur_node->m_head == "numero_real") 
         {
-            fator_node->m_attributes["syn"] = Attribute(Attribute::REAL, cur_node->m_terminal->lexem_to_str());
+            fator_node->m_attributes["syn"] = Attribute(EType::REAL, cur_node->m_terminal->lexem_to_str());
         }
         else if(cur_node->m_head == ")") 
         {
@@ -108,7 +108,7 @@ void SemanticActions::action_termo_POST_op_un(Node* cur_node) {
     */
     if (cur_node->m_head == "<fator>" && cur_node->m_parent->m_head == "<termo>") {        
         int aux = cur_node->m_parent->m_node_list->at(0)->m_node_list->at(0)->m_head == "-" ? -1 : 1;
-        cur_node->m_attributes["inh"] = Attribute(Attribute::INTEGER, aux);
+        cur_node->m_attributes["inh"] = Attribute(EType::INTEGER, aux);
     }
 };
 
@@ -137,7 +137,7 @@ void SemanticActions::action_termo_POST_fator(Node* cur_node) {
 
 void SemanticActions::action_op_mul(Node* cur_node) {    
     if ((cur_node->m_head == "*" || cur_node->m_head == "/") && cur_node->m_parent->m_head == "<op_mul>") {        
-        cur_node->m_parent->m_attributes["lexval"] = Attribute(Attribute::STRING, cur_node->m_terminal->lexem_to_str());
+        cur_node->m_parent->m_attributes["lexval"] = Attribute(EType::STRING, cur_node->m_terminal->lexem_to_str());
     }
 };
 
@@ -175,11 +175,11 @@ void SemanticActions::action_mais_fatores(Node* cur_node) {
         auto right_operand = mais_fatores_child->m_attributes["syn"]; // atributo herdado da subárvore imediatamente abaixo de <mais_fatores>, podendo ter uma variável temporária ou um lexema
 
         // atributo da variável temporária
-        Attribute::EAttrTipo temp_attr;
+        EType temp_attr;
 
         if (left_operand.m_type != right_operand.m_type)
         {
-            temp_attr = Attribute::REAL;
+            temp_attr = EType::REAL;
         } 
         else {
             temp_attr = left_operand.m_type;
@@ -205,7 +205,7 @@ void SemanticActions::action_termo_POST_mais_fatores(Node* cur_node) {
 
 void SemanticActions::action_op_ad(Node* cur_node) {    
     if ((cur_node->m_head == "+" || cur_node->m_head == "-") && cur_node->m_parent->m_head == "<op_ad>") {        
-        cur_node->m_parent->m_attributes["lexval"] = Attribute(Attribute::STRING, cur_node->m_terminal->lexem_to_str());
+        cur_node->m_parent->m_attributes["lexval"] = Attribute(EType::STRING, cur_node->m_terminal->lexem_to_str());
     }
 };
 
@@ -270,11 +270,11 @@ void SemanticActions::action_outros_termos(Node* cur_node) {
         auto left_operand = outros_termos_parent->m_attributes["inh"];
         auto right_operand = outros_termos_child->m_attributes["syn"];
 
-        Attribute::EAttrTipo temp_attr;
+        EType temp_attr;
 
         if (left_operand.m_type != right_operand.m_type)
         {
-            temp_attr = Attribute::REAL;
+            temp_attr = EType::REAL;
         } 
         else {
             temp_attr = left_operand.m_type;

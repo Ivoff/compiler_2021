@@ -4,20 +4,25 @@
 #include <map>
 #include <string>
 #include <exception>
+#include "../../misc/type.hpp"
 
-struct Symbol {
-    enum EType {
-        INTEGER = 0x300,
-        REAL
-    };
-
+struct Symbol 
+{
     std::string m_name;
     EType m_type;
 
     Symbol(){};
-    Symbol(std::string name, Symbol::EType type) {
+    Symbol(std::string name, EType type) {
         m_name = name;
         m_type = type;
+    }
+
+    Symbol(std::string name, std::string type) {
+        m_name = name;
+        if (type == "real")
+            m_type = EType::REAL;
+        else
+            m_type = EType::INTEGER;
     }
 
     std::string type_to_string() {
@@ -25,7 +30,7 @@ struct Symbol {
             return "integer";
         else
             return "real";
-    }
+    }    
 };
 
 struct SymbolTable {
@@ -33,8 +38,8 @@ struct SymbolTable {
     std::map<std::string, std::pair<Symbol, std::string >> m_table;
 
     SymbolTable(){};
-    void add_entry(std::string name, std::string type);
-    void print_table();
+    void add_entry(Symbol symbol);
+    void print();
 };
 
 struct Scope {    

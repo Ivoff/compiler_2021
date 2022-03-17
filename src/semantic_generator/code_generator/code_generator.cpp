@@ -22,7 +22,7 @@ void CodeGenerator::add_code(std::string op, int argument1, double argument2, st
 
 
 void CodeGenerator::print() {
-    printf("%s\n", m_out_buffer.c_str());
+    printf("%s", m_out_buffer.c_str());
 }
 
 std::string CodeGenerator::gen_temp() {

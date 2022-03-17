@@ -12,7 +12,21 @@ Node::Node(std::string head) {
  * @return Node* 
  */
 Node* Node::sibling(int index) {
+    if (index > m_node_list->size()-1) {        
+        std::runtime_error("erro: index fora dos limites\n");
+        std::exit(0);
+    }
+
     return m_parent->m_node_list->at(index);
+}
+
+Node* Node::child(int index) {
+    if (index > m_node_list->size()-1) {        
+        std::runtime_error("erro: index fora dos limites\n");
+        std::exit(0);
+    }
+        
+    return m_node_list->at(index);
 }
 
 /**
