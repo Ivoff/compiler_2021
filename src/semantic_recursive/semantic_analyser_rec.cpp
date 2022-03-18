@@ -111,7 +111,9 @@ void RecursiveSemanticAnalyser::fator(Node* cur_node)
     }
     else
     {
-        //TODO: fazer expressao
+        auto expressao_node = cur_node->child(1);
+        expressao(expressao_node);
+        cur_node->m_attributes["syn"] = expressao_node->m_attributes["syn"];
     }
 }
 
@@ -153,6 +155,7 @@ void RecursiveSemanticAnalyser::expressao(Node* cur_node)
     termo(termo_node);
     outros_termos_node->m_attributes["inh"] = termo_node->m_attributes["syn"];
     outros_termos(outros_termos_node);
+    cur_node->m_attributes["syn"] = outros_termos_node->m_attributes["syn"];
 
     return;
 }
@@ -178,8 +181,31 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
     else if (first_node->m_head == "ident")
     {
         auto expressao_node = cur_node->child(2);
-        expressao(expressao_node);        
+        auto ident = cur_node->child(0)->m_terminal->lexem_to_str();
+
+        expressao(expressao_node);
+
+        if (m_symbol_table->find(ident))
+        {
+            if (m_symbol_table->m_table[ident].first.m_type == expressao_node->m_attributes["syn"].m_type || expressao_node->m_attributes["syn"].m_type == EType::INTEGER)
+            {
+                m_symbol_table->m_table[ident].second = expressao_node->m_attributes["syn"].to_string();
+                m_code_generator->add_code(":=", m_symbol_table->m_table[ident].second, "", ident);
+            }
+            else
+            {
+                printf("[ERRO] variável %s não corresponde ao tipo da expressao\n", ident);
+                std::exit(0);
+            }
+        }
+        else
+        {
+            printf("[ERRO] variável %s não existe\n", ident);
+            std::exit(0);
+        }
     }
+
+    return;
 }
 
 void RecursiveSemanticAnalyser::comandos(Node* cur_node)
