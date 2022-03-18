@@ -174,7 +174,7 @@ struct ParseTable {
                 },
                 {
                     "if",
-                    {"if", "<condicao>", "then", "<comando>", "<pfalsa>", "$"}
+                    {"if", "<condicao>", "then", "<comandos>", "<pfalsa>", "$"}
                 },
                 {
                     "ident",
