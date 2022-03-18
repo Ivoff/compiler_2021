@@ -11,6 +11,11 @@ void SymbolTable::add_entry(Symbol symbol)
     }
 }
 
+bool SymbolTable::find(std::string name)
+{
+    return m_table.count(name);
+}
+
 void SymbolTable::print() {
     for(auto it = m_table.begin(); it != m_table.end(); ++it)
     {

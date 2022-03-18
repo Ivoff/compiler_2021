@@ -9,21 +9,10 @@
 
 int main() {
 
-    // Scanner scanner = Scanner("input");    
-    // Token* cur_token;
-    // while((cur_token = scanner.next_token()) != nullptr) {
-    //     printf("%s\n", cur_token->to_string().c_str());
-    // }    
-
     Parser* parser = new Parser("input");    
     try {
         SymbolTable* symbol_table = new SymbolTable();
         CodeGenerator* code_generator = new CodeGenerator();
-        
-        // SemanticAnalyser* analyser = new SemanticAnalyser(
-        //     parser->parse(), 
-        //     new SemanticActionsTable(symbol_table, code_generator)
-        // );
 
         RecursiveSemanticAnalyser* analyser = new RecursiveSemanticAnalyser(
             parser->parse(),

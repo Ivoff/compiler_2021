@@ -39,6 +39,7 @@ struct SymbolTable {
 
     SymbolTable(){};
     void add_entry(Symbol symbol);
+    bool find(std::string name);
     void print();
 };
 

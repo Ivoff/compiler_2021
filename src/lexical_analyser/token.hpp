@@ -128,13 +128,16 @@ struct Token {
     }
 
     std::string lexem_to_str() {
-        if (m_id == ETokenId::NUMBER_INT) {
+        if (m_id == ETokenId::NUMBER_INT) 
+        {
             return std::to_string(m_int_attr);
         }
-        else if (m_id == ETokenId::NUMBER_REAL) {
+        else if (m_id == ETokenId::NUMBER_REAL) 
+        {
             return std::to_string(m_real_attr);
         } 
-        else {
+        else 
+        {
             return std::string(m_str_attr);
         }
     }

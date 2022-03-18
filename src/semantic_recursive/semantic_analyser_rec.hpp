@@ -21,7 +21,14 @@ struct RecursiveSemanticAnalyser {
     void mais_dc(Node* cur_node);
     void comandos(Node* cur_node);
     void mais_var(Node* cur_node);
-
+    void comando(Node* cur_node);
+    void mais_comandos(Node* cur_node);
+    void expressao(Node* cur_node);
+    void termo(Node* cur_node);
+    void outros_termos(Node* cur_node);
+    void op_un(Node* cur_node);
+    void fator(Node* cur_node);
+    void mais_fatores(Node* cur_node);        
 };
 
 #endif
