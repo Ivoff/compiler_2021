@@ -21,14 +21,14 @@ int main() {
         );
 
         analyser->analise();
-        parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");        
+        // parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
         code_generator->print();
-        symbol_table->print();
+        // symbol_table->print();
     } 
     catch (std::runtime_error& ex) {
-        std::cerr << "[Runtime error]" << ex.what() << std::endl;
-        parser->m_parse_tree->print(parser->m_parse_tree->m_root, "");
-        exit(EXIT_SUCCESS);
+        std::cerr << "[Runtime error] " << ex.what() << std::endl;
+        parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
+        std::exit(EXIT_SUCCESS);
     }    
 
     return 0;

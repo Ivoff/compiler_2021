@@ -26,9 +26,14 @@ struct RecursiveSemanticAnalyser {
     void expressao(Node* cur_node);
     void termo(Node* cur_node);
     void outros_termos(Node* cur_node);
+    void op_ad(Node* cur_node);
     void op_un(Node* cur_node);
     void fator(Node* cur_node);
-    void mais_fatores(Node* cur_node);        
+    void mais_fatores(Node* cur_node);
+    void op_mul(Node* cur_node);
+    void condicao(Node* cur_node);
+    void pfalsa(Node* cur_node);
+    void relacao(Node* cur_node);    
 };
 
 #endif

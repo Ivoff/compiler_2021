@@ -14,6 +14,63 @@ RecursiveSemanticAnalyser::RecursiveSemanticAnalyser(ParseTree* parse_tree, Symb
     m_parse_tree->m_current_node = m_parse_tree->m_root;
 }
 
+void RecursiveSemanticAnalyser::pfalsa(Node* cur_node)
+{
+    if (cur_node->child(0)->m_head == "&")
+    {
+        cur_node->m_attributes["end_loc"] = cur_node->m_attributes["inh"];
+        return;
+    }
+
+    auto comandos_node = cur_node->child(1);
+
+    comandos(comandos_node);
+    cur_node->m_attributes["end_loc"] = comandos_node->m_attributes["end_loc"];
+
+    return;
+}
+
+void RecursiveSemanticAnalyser::relacao(Node* cur_node)
+{
+    cur_node->m_attributes["lexval"] = Attribute(EType::STRING, cur_node->child(0)->m_terminal->lexem_to_str());
+    return;
+}
+
+void RecursiveSemanticAnalyser::condicao(Node* cur_node)
+{
+    auto expressao1_node = cur_node->child(0);
+    auto relacao_node = cur_node->child(1);
+    auto expressao2_node = cur_node->child(2);
+
+    expressao(expressao1_node);
+    cur_node->m_attributes["left_op"] = expressao1_node->m_attributes["syn"];
+    relacao(relacao_node);
+    cur_node->m_attributes["rel_op"] = relacao_node->m_attributes["lexval"];
+    expressao(expressao2_node);
+    cur_node->m_attributes["right_op"] = expressao2_node->m_attributes["syn"];
+    
+    auto syn_type = cur_node->m_attributes["left_op"].m_type == cur_node->m_attributes["right_op"].m_type ? cur_node->m_attributes["right_op"].m_type : EType::REAL;
+    cur_node->m_attributes["syn"] = Attribute(syn_type, m_code_generator->gen_temp());
+    
+    m_code_generator->add_code(
+        cur_node->m_attributes["rel_op"].to_string(),
+        cur_node->m_attributes["left_op"].to_string(),
+        cur_node->m_attributes["right_op"].to_string(),
+        cur_node->m_attributes["syn"].to_string()
+    );
+
+    int three_addr_loc = m_code_generator->add_code(
+        "JF",
+        cur_node->m_attributes["syn"].to_string(),
+        "",
+        ""
+    );
+
+    cur_node->m_attributes["jump_loc"] = Attribute(EType::INTEGER, three_addr_loc);    
+
+    return;
+}
+
 void RecursiveSemanticAnalyser::outros_termos(Node* cur_node)
 {
     if (cur_node->child(0)->m_head == "&")
@@ -22,11 +79,12 @@ void RecursiveSemanticAnalyser::outros_termos(Node* cur_node)
         return;
     }
 
-    auto op_ad = cur_node->child(0)->child(0)->m_terminal->lexem_to_str();
+    auto op_ad_node = cur_node->child(0);
     auto termo_node = cur_node->child(1);
     auto outros_termos1_node = cur_node->child(2);
 
-    cur_node->m_attributes["op"] = Attribute(EType::STRING, op_ad);
+    op_ad(op_ad_node);
+    cur_node->m_attributes["op"] = Attribute(EType::STRING, op_ad_node->m_attributes["lexval"].to_string());
     termo(termo_node);
     outros_termos1_node->m_attributes["inh"] = termo_node->m_attributes["syn"];
     outros_termos(outros_termos1_node);
@@ -42,12 +100,21 @@ void RecursiveSemanticAnalyser::outros_termos(Node* cur_node)
     return;
 }
 
+void RecursiveSemanticAnalyser::op_ad(Node* cur_node)
+{
+    cur_node->m_attributes["lexval"] = Attribute(EType::STRING, cur_node->child(0)->m_terminal->lexem_to_str());
+    return;
+}
+
 void RecursiveSemanticAnalyser::mais_comandos(Node* cur_node)
 {
     if (cur_node->child(0)->m_head == ";")
     {
-        comandos(cur_node->child(1));        
+        comandos(cur_node->child(1));
+        cur_node->m_attributes["end_loc"] = cur_node->child(1)->m_attributes["end_loc"];
     }
+
+    cur_node->m_attributes["end_loc"] = cur_node->m_attributes["inh"];
 
     return;
 }
@@ -60,23 +127,30 @@ void RecursiveSemanticAnalyser::mais_fatores(Node* cur_node)
         return;
     }
 
-    auto op_mul = cur_node->child(0)->child(0)->m_terminal->lexem_to_str();
+    auto op_mul_node = cur_node->child(0);
     auto fator_node = cur_node->child(1);
     auto mais_fatores1_node = cur_node->child(2);        
 
-    cur_node->m_attributes["op"] = Attribute(EType::STRING, op_mul);
+    op_mul(op_mul_node);
+    cur_node->m_attributes["op"] = Attribute(EType::STRING, op_mul_node->m_attributes["lexval"].to_string());
     fator(fator_node);
     mais_fatores1_node->m_attributes["inh"] = fator_node->m_attributes["syn"];    
     mais_fatores(mais_fatores1_node);
     cur_node->m_attributes["syn"] = Attribute(cur_node->m_attributes["inh"].m_type, m_code_generator->gen_temp());
 
     m_code_generator->add_code(
-        cur_node->m_attributes["op"].to_string(), 
-        cur_node->m_attributes["inh"].to_string(), 
-        mais_fatores1_node->m_attributes["syn"].to_string(), 
+        cur_node->m_attributes["op"].to_string(),
+        cur_node->m_attributes["inh"].to_string(),
+        mais_fatores1_node->m_attributes["syn"].to_string(),
         cur_node->m_attributes["syn"].to_string()
     );
 
+    return;
+}
+
+void RecursiveSemanticAnalyser::op_mul(Node* cur_node)
+{    
+    cur_node->m_attributes["lexval"] = Attribute(EType::STRING, cur_node->child(0)->m_terminal->lexem_to_str());
     return;
 }
 
@@ -163,6 +237,8 @@ void RecursiveSemanticAnalyser::expressao(Node* cur_node)
 void RecursiveSemanticAnalyser::comando(Node* cur_node)
 {
     auto first_node = cur_node->child(0);
+    
+    printf("%s\n", first_node->m_head.c_str());
 
     if (first_node->m_head == "read" || first_node->m_head == "write")
     {
@@ -170,7 +246,14 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
         
         if (m_symbol_table->find(ident))
         {
-            m_code_generator->add_code(first_node->m_head, first_node->m_head[0] == 'r' ? "" : ident, "", first_node->m_head[0] == 'r' ? ident : "");
+            int three_addr_loc = m_code_generator->add_code(
+                first_node->m_head, 
+                first_node->m_head[0] == 'r' ? "" : ident, 
+                "", 
+                first_node->m_head[0] == 'r' ? ident : ""
+            );
+
+            cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, three_addr_loc);
         }
         else
         {
@@ -189,8 +272,15 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
         {
             if (m_symbol_table->m_table[ident].first.m_type == expressao_node->m_attributes["syn"].m_type || expressao_node->m_attributes["syn"].m_type == EType::INTEGER)
             {
-                m_symbol_table->m_table[ident].second = expressao_node->m_attributes["syn"].to_string();
-                m_code_generator->add_code(":=", m_symbol_table->m_table[ident].second, "", ident);
+                m_symbol_table->m_table[ident].second = expressao_node->m_attributes["syn"].to_string();                
+                int three_addr_loc = m_code_generator->add_code(
+                    ":=", 
+                    m_symbol_table->m_table[ident].second, 
+                    "", 
+                    ident
+                );
+
+                cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, three_addr_loc);
             }
             else
             {
@@ -204,6 +294,29 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
             std::exit(0);
         }
     }
+    else if (first_node->m_head == "if")
+    {
+        auto condicao_node = cur_node->child(1);
+        auto comandos_node = cur_node->child(3);
+        auto pfalsa_node = cur_node->child(4);
+
+        condicao(condicao_node);
+        comandos(comandos_node);
+        
+        if (pfalsa_node->child(0)->m_head == "else")
+        {
+            condicao_node->m_attributes["goto_loc"] = Attribute(EType::INTEGER, m_code_generator->add_code("goto", "", "", ""));
+        }            
+
+        pfalsa_node->m_attributes["inh"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
+        m_code_generator->edit(condicao_node->m_attributes["jump_loc"].m_int, 2, std::to_string(m_code_generator->m_cur_line));
+        pfalsa(pfalsa_node);
+
+        if (pfalsa_node->child(0)->m_head == "else")
+        {
+            m_code_generator->edit(condicao_node->m_attributes["goto_loc"].m_int, 1, std::to_string(m_code_generator->m_cur_line));
+        }            
+    }
 
     return;
 }
@@ -214,7 +327,9 @@ void RecursiveSemanticAnalyser::comandos(Node* cur_node)
     auto mais_comandos_node = cur_node->child(1);
 
     comando(comando_node);
+    mais_comandos_node->m_attributes["inh"] = comando_node->m_attributes["end_loc"];
     mais_comandos(mais_comandos_node);
+    cur_node->m_attributes["end_loc"] = mais_comandos_node->m_attributes["end_loc"];
 
     return;
 }
@@ -302,6 +417,7 @@ void RecursiveSemanticAnalyser::corpo(Node* cur_node)
 
     dc(dc_node);
     comandos(comandos_node);
+    m_code_generator->add_code("PARA", "", "", "");
 }
 
 void RecursiveSemanticAnalyser::programa(Node* cur_node) 
@@ -312,6 +428,6 @@ void RecursiveSemanticAnalyser::programa(Node* cur_node)
 }
 
 void RecursiveSemanticAnalyser::analise() 
-{
+{    
     programa(m_parse_tree->m_root);
 }

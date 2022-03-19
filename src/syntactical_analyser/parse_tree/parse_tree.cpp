@@ -12,18 +12,22 @@ Node::Node(std::string head) {
  * @return Node* 
  */
 Node* Node::sibling(int index) {
-    if (index > m_node_list->size()-1) {        
-        std::runtime_error("erro: index fora dos limites\n");
-        std::exit(0);
+    if (index > m_node_list->size()-1) 
+    {
+        throw std::runtime_error(
+            std::string("Node["+m_head+"]->sibling("+std::to_string(index)+")\nfora dos limites")
+        );
     }
 
     return m_parent->m_node_list->at(index);
 }
 
 Node* Node::child(int index) {
-    if (index > m_node_list->size()-1) {        
-        std::runtime_error("erro: index fora dos limites\n");
-        std::exit(0);
+    if (index > m_node_list->size()-1) 
+    {
+        throw std::runtime_error(
+            std::string("Node["+m_head+"]->child("+std::to_string(index)+")\nfora dos limites")
+        );
     }
         
     return m_node_list->at(index);
@@ -77,9 +81,13 @@ void ParseTree::print_attr(Node* current_node, std::string level) {
         
         if (!current_node->m_attributes.empty()) 
         {
+            std::string attr_value;
             for(auto itr =  current_node->m_attributes.begin(); itr != current_node->m_attributes.end(); ++itr) 
             {
-                printf("%s[attr] %s.%s = %s (%s)\n", level.c_str(), current_node->m_head.c_str(), itr->first.c_str(), itr->second.to_string().c_str(), itr->second.type_to_string().c_str());
+                attr_value = itr->second.to_string();
+                if (attr_value == "")
+                    attr_value = "{null}";
+                printf("%s[attr] %s.%s = %s (%s)\n", level.c_str(), current_node->m_head.c_str(), itr->first.c_str(), attr_value.c_str(), itr->second.type_to_string().c_str());
             }            
         }
     }
