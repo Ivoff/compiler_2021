@@ -6,9 +6,16 @@ Uma escolha que se tornou um tanto quanto agradável, já que eu tinha sempre um
 O compilador permite você ver a tal da árvore e ,ainda por cima, anotada. Olha só! É bom demais para acreditar né?
 
 ## TODO:
-```
-//TODO:
-```
+
+- [ ] terminar comp2
+- [ ] fazer umas mensagens de erro melhores
+- [ ] remover coisas inúteis do código como o id dos tokens já que o parse é feito diretamente comparando o próprio lexema
+   - [] ver se tem como otimizar o parsing ou a análise semantica implementando ids para os tokens apropriadamente
+- [ ] arrumar documentação
+   - [ ] automato não reconhece lexemas relativos a expressões condicionais como if, else, then, while e etc
+   - [ ] uml desatualizado
+
+---
 
 # Build
 ```
