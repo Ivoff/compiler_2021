@@ -4,7 +4,6 @@
 #include "syntactical_analyser/parser.hpp"
 #include "semantic_generator/semantic_analyser.hpp"
 #include "semantic_generator/symbol_table/symbol_table.hpp"
-#include "semantic_generator/code_generator/code_generator.hpp"
 #include "semantic_recursive/semantic_analyser_rec.hpp"
 
 int main() {
@@ -21,7 +20,7 @@ int main() {
         );
 
         analyser->analise();
-        // parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
+        parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
         code_generator->print();
         // symbol_table->print();
     } 

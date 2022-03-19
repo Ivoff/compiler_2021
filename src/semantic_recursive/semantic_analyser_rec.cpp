@@ -238,8 +238,6 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
 {
     auto first_node = cur_node->child(0);
     
-    printf("%s\n", first_node->m_head.c_str());
-
     if (first_node->m_head == "read" || first_node->m_head == "write")
     {
         auto ident = cur_node->child(2)->m_terminal->lexem_to_str();
