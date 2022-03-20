@@ -112,13 +112,17 @@ struct ParseTable {
                 {
                     ";",
                     {"&"}
-                },
+                },                
                 {
                     ",",
                     {",", "<variaveis>"}
                 },
                 {
                     "begin",
+                    {"&"}
+                },
+                {
+                    ")",
                     {"&"}
                 }
             }
@@ -170,7 +174,7 @@ struct ParseTable {
             "<mais_par>",
             {
                 {
-                    "(",
+                    ";",
                     {";", "<lista_par>"}
                 },
                 {
@@ -227,7 +231,7 @@ struct ParseTable {
             }
         },
         {
-            "lista_arg",
+            "<lista_arg>",
             {
                 {
                     "end",
@@ -541,13 +545,25 @@ struct ParseTable {
         },
         {
             "<outros_termos>",
-            {
+            {                
+                {
+                    "-",
+                    {"<op_ad>", "<termo>", "<outros_termos>"}
+                },
+                {
+                    "+",
+                    {"<op_ad>", "<termo>", "<outros_termos>"}
+                },
                 {
                     "end",
                     {"&"}
                 },
                 {
                     ")",
+                    {"&"}
+                },
+                {
+                    ";",
                     {"&"}
                 },
                 {
@@ -583,19 +599,23 @@ struct ParseTable {
                     {"&"}
                 },
                 {
-                    "-",
-                    {"<op_ad>", "<termo>", "<outros_termos>"}
+                    "*",
+                    {"<op_mul>", "<fator>", "<mais_fatores>"}
                 },
                 {
-                    "+",
-                    {"<op_ad>", "<termo>", "<outros_termos>"}
+                    "/",
+                    {"<op_mul>", "<fator>", "<mais_fatores>"}
                 },
                 {
                     "else",
                     {"&"}
                 },
                 {
-                    ";",
+                    "do",
+                    {"&"}
+                },
+                {
+                    ")",
                     {"&"}
                 }
             }
@@ -678,6 +698,14 @@ struct ParseTable {
                 },
                 {
                     "else",
+                    {"&"}
+                },
+                {
+                    "do",
+                    {"&"}
+                },
+                {
+                    ")",
                     {"&"}
                 }
             }

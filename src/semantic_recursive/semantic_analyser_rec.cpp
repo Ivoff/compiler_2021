@@ -14,6 +14,52 @@ RecursiveSemanticAnalyser::RecursiveSemanticAnalyser(ParseTree* parse_tree, Symb
     m_parse_tree->m_current_node = m_parse_tree->m_root;
 }
 
+void RecursiveSemanticAnalyser::mais_par(Node* cur_node)
+{
+    if (cur_node->child(0)->m_head != "&")
+    {
+        auto lista_par_node = cur_node->child(1);
+
+        lista_par(lista_par_node);
+    }
+
+    return;
+}
+
+void RecursiveSemanticAnalyser::lista_par(Node* cur_node)
+{
+    auto tipo_var_node = cur_node->child(0);
+    auto variaveis_node = cur_node->child(2);
+    auto mais_par_node = cur_node->child(3);
+
+    tipo_var(tipo_var_node);
+    variaveis_node->m_attributes["inh"] = tipo_var_node->m_attributes["syn"];
+    variaveis(variaveis_node);    
+    mais_par(mais_par_node);
+
+    return;
+}
+
+void RecursiveSemanticAnalyser::parametros(Node* cur_node)
+{
+    if (cur_node->child(0)->m_head != "&")
+    {
+        auto lista_par_node = cur_node->child(1);
+
+        lista_par(lista_par_node);
+    }
+
+    return;    
+}
+
+void RecursiveSemanticAnalyser::dc_p(Node* cur_node)
+{
+    auto parametros_node = cur_node->child(2);
+    auto corpo_p_node = cur_node->child(3);
+
+    parametros(parametros_node);
+}
+
 void RecursiveSemanticAnalyser::pfalsa(Node* cur_node)
 {
     if (cur_node->child(0)->m_head == "&")

@@ -8,6 +8,11 @@ O compilador permite você ver a tal da árvore e ,ainda por cima, anotada. Olha
 ## TODO:
 
 - [ ] terminar comp2
+   - [x] atualizar conjuntos First e Follow
+      - [x] documentar o que foi alterado
+   - [x] atualizar tabela de parse
+   - [ ] atualizar regras semanticas
+   - [ ] implementar conversor de quadrupla pra código objeto de máquina hipotética
 - [ ] fazer umas mensagens de erro melhores
 - [ ] remover coisas inúteis do código como o id dos tokens já que o parse é feito diretamente comparando o próprio lexema
    - [ ] ver se tem como otimizar o parsing ou a análise semantica implementando ids para os tokens apropriadamente

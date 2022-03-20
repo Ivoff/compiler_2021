@@ -33,7 +33,11 @@ struct RecursiveSemanticAnalyser {
     void op_mul(Node* cur_node);
     void condicao(Node* cur_node);
     void pfalsa(Node* cur_node);
-    void relacao(Node* cur_node);    
+    void relacao(Node* cur_node);
+    void dc_p(Node* cur_node);
+    void parametros(Node* cur_node);
+    void lista_par(Node* cur_node);
+    void mais_par(Node* cur_node);
 };
 
 #endif
