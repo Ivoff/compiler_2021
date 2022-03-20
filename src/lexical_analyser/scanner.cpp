@@ -138,9 +138,9 @@ Token* Scanner::next_token() {
     char curr_char;    
     std::string lexem;
     while(true) {
-        curr_char = next_char();        
+        curr_char = next_char();
         switch(m_state) {
-            case 0:                
+            case 0:
                 if (is_eof()) {
                     return nullptr;                                
                 }
@@ -191,6 +191,11 @@ Token* Scanner::next_token() {
                     else {
                         throw std::runtime_error("Tem algo de errado no reconhecimento de operadores");
                     }
+                }
+                else if (curr_char == '{')
+                {
+                    m_state = 17;
+                    break;
                 }
 
                 lexem += curr_char;
@@ -338,6 +343,13 @@ Token* Scanner::next_token() {
                 }                
             break;
             case 13:
+                if (curr_char == '*' && m_input_buffer[m_buffer_pos-2] == '/')
+                {
+                    lexem = "";
+                    m_state = 17;
+                    break;
+                }
+
                 regress();
                 m_state = 0;
 
@@ -378,6 +390,35 @@ Token* Scanner::next_token() {
                     return new Token(ETokenId::SYMBOL, lexem, lexem);
                 else
                     throw std::runtime_error(error_message(lexem));
+            break;
+            case 17:
+            if (curr_char == '*')
+                {
+                    m_state = 18;
+                    break;
+                }
+                if (curr_char == '}')
+                {
+                    m_state = 0;
+                    break;
+                }
+                if (curr_char != '}')
+                {
+                    m_state = 17;
+                    break;
+                }
+            break;
+            case 18:
+                if (curr_char == '/')
+                {
+                    m_state = 0;
+                    break;
+                }
+                else 
+                {
+                    m_state = 17;
+                    break;
+                }                
             break;
         }
     }

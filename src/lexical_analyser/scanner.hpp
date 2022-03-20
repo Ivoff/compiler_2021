@@ -22,6 +22,7 @@ struct Scanner {
         "end",
         "real",
         "integer",
+        "procedure",
         "read",
         "write"
     };
@@ -53,7 +54,9 @@ struct Scanner {
     std::map<std::string, ETokenId> m_cond_map {
         {"if", ETokenId::IF},
         {"else", ETokenId::ELSE},
-        {"then", ETokenId::THEN}
+        {"then", ETokenId::THEN},
+        {"while", ETokenId::WHILE},
+        {"do", ETokenId::DO}
     };    
 
     Scanner(std::string file_path);        

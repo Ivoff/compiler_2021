@@ -23,6 +23,8 @@ enum class ETokenId {
     IF,
     THEN,
     ELSE,
+    WHILE,
+    DO,
     SYMBOL,
     RESERVED,
     NULLABLE
@@ -91,6 +93,8 @@ struct Token {
             {ETokenId::IF, "IF"},
             {ETokenId::THEN, "THEN"},
             {ETokenId::ELSE, "ELSE"},
+            {ETokenId::WHILE, "WHILE"},
+            {ETokenId::DO, "WHILE"},
             {ETokenId::SYMBOL, "SYMBOL"},
             {ETokenId::RESERVED, "RESERVED"},
             {ETokenId::NULLABLE, "NULLABLE"}

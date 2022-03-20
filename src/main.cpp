@@ -8,27 +8,41 @@
 
 int main() {
 
-    Parser* parser = new Parser("input");    
-    try {
-        SymbolTable* symbol_table = new SymbolTable();
-        CodeGenerator* code_generator = new CodeGenerator();
+    Scanner scan = Scanner("input_new");
+    while(true)
+    {
+        Token* cur_token = scan.next_token();
+        if (cur_token != nullptr)
+        {
+            printf("%s\n", cur_token->to_string().c_str());
+        } 
+        else
+        {
+            break;
+        }
+    }
 
-        RecursiveSemanticAnalyser* analyser = new RecursiveSemanticAnalyser(
-            parser->parse(),
-            symbol_table,
-            code_generator
-        );
+    // Parser* parser = new Parser("input");    
+    // try {
+    //     SymbolTable* symbol_table = new SymbolTable();
+    //     CodeGenerator* code_generator = new CodeGenerator();
 
-        analyser->analise();
-        parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
-        code_generator->print();
-        // symbol_table->print();
-    } 
-    catch (std::runtime_error& ex) {
-        std::cerr << "[Runtime error] " << ex.what() << std::endl;
-        parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
-        std::exit(EXIT_SUCCESS);
-    }    
+    //     RecursiveSemanticAnalyser* analyser = new RecursiveSemanticAnalyser(
+    //         parser->parse(),
+    //         symbol_table,
+    //         code_generator
+    //     );
+
+    //     analyser->analise();
+    //     parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
+    //     code_generator->print();
+    //     // symbol_table->print();
+    // } 
+    // catch (std::runtime_error& ex) {
+    //     std::cerr << "[Runtime error] " << ex.what() << std::endl;
+    //     parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
+    //     std::exit(EXIT_SUCCESS);
+    // }    
 
     return 0;
 }
