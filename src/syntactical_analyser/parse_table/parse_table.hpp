@@ -51,6 +51,10 @@ struct ParseTable {
                 {
                     "begin",
                     {"&"}
+                },
+                {
+                    "procedure",
+                    {"<dc_p>"}
                 }
             }
         },
@@ -120,6 +124,156 @@ struct ParseTable {
             }
         },
         {
+            "<dc_p>",
+            {
+                {
+                    "procedure",
+                    {"procedure", "ident", "<parametros>", "<corpo_p>"}
+                }
+            }
+        },
+        {
+            "<parametros>",
+            {
+                {
+                    "real",
+                    {"&"}
+                },
+                {
+                    "integer",
+                    {"&"}
+                },
+                {
+                    "(",
+                    {"(", "<lista_par>", ")"}
+                },
+                {
+                    "begin",
+                    {"&"}
+                }
+            }
+        },
+        {
+            "<lista_par>",
+            {
+                {
+                    "real",
+                    {"<tipo_var>", ":", "<variaveis>", "<mais_par>"}
+                },
+                {
+                    "integer",
+                    {"<tipo_var>", ":", "<variaveis>", "<mais_par>"}
+                }
+            }
+        },
+        {
+            "<mais_par>",
+            {
+                {
+                    "(",
+                    {";", "<lista_par>"}
+                },
+                {
+                    ")",
+                    {"&"}
+                }
+            }
+        },
+        {
+            "<corpo_p>",
+            {
+                {
+                    "real",
+                    {"<dc_loc>", "begin", "<comandos>", "end"}
+                },
+                {
+                    "integer",
+                    {"<dc_loc>", "begin", "<comandos>", "end"}
+                },
+                {
+                    "begin",
+                    {"<dc_loc>", "begin", "<comandos>", "end"}
+                }
+            }
+        },
+        {
+            "<dc_loc>",
+            {
+                {
+                    "real",
+                    {"<dc_v>", "<mais_dcloc>"}
+                },
+                {
+                    "integer",
+                    {"<dc_v>", "<mais_dcloc>"}
+                },
+                {
+                    "begin",
+                    {"&"}
+                }
+            }
+        },
+        {
+            "<mais_dcloc>",
+            {
+                {
+                    ";",
+                    {";", "<dc_loc>"}
+                },
+                {
+                    "begin",
+                    {"&"}
+                }
+            }
+        },
+        {
+            "lista_arg",
+            {
+                {
+                    "end",
+                    {"&"}
+                },
+                {
+                    "(",
+                    {"(", "<argumentos>", ")"}
+                },
+                {
+                    ";",
+                    {"&"}
+                },
+                {
+                    "$",
+                    {"&"}
+                },
+                {
+                    "else",
+                    {"&"}
+                }
+            }
+        },
+        {
+            "<argumentos>",
+            {
+                {
+                    "ident",
+                    {"ident", "<mais_ident>"}
+                }
+            }
+        },
+        {
+            "<mais_ident>",
+            {
+                {
+                    ")",
+                    {"&"}
+                },
+                {
+                    ",",
+                    {",", "<argumentos>"}
+                }
+            }
+        },
+        {
             "<comandos>",
             {
                 {
@@ -137,7 +291,11 @@ struct ParseTable {
                 {
                     "ident",
                     {"<comando>", "<mais_comandos>"}
-                }            
+                },
+                {
+                    "while",
+                    {"<comando>", "<mais_comandos>"}
+                }
             }
         },
         {
@@ -178,7 +336,40 @@ struct ParseTable {
                 },
                 {
                     "ident",
-                    {"ident", ":=", "<expressao>"}
+                    {"ident", "<restoIdent>"}
+                },
+                {
+                    "while",
+                    {"while", "<condicao>", "do", "<comandos>", "$"}
+                }
+            }
+        },
+        {
+            "<restoIdent>",
+            {
+                {
+                    "end",
+                    {"<lista_arg>"}
+                },
+                {
+                    "(",
+                    {"<lista_arg>"}
+                },
+                {
+                    ":=",
+                    {":=", "<expressao>"}
+                },
+                {
+                    ";",
+                    {"<lista_arg>"}
+                },
+                {
+                    "$",
+                    {"<lista_arg>"}
+                },
+                {
+                    "else",
+                    {"<lista_arg>"}
                 }
             }
         },

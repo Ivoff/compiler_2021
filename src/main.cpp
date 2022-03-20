@@ -7,22 +7,9 @@
 #include "semantic_recursive/semantic_analyser_rec.hpp"
 
 int main() {
-
-    Scanner scan = Scanner("input_new");
-    while(true)
-    {
-        Token* cur_token = scan.next_token();
-        if (cur_token != nullptr)
-        {
-            printf("%s\n", cur_token->to_string().c_str());
-        } 
-        else
-        {
-            break;
-        }
-    }
-
-    // Parser* parser = new Parser("input");    
+    Parser* parser = new Parser("input");    
+    parser->parse();
+    parser->m_parse_tree->print(parser->m_parse_tree->m_root, "");
     // try {
     //     SymbolTable* symbol_table = new SymbolTable();
     //     CodeGenerator* code_generator = new CodeGenerator();

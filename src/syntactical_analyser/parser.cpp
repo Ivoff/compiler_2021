@@ -59,9 +59,9 @@ std::string Parser::sintax_error(std::string expected) {
 }
 
 ParseTree* Parser::parse() {    
-    m_cur_token = m_scanner->next_token();
+    m_cur_token = m_scanner->next_token();    
     while(m_parse_stack.top() != "EOF") {        
-        std::string top = m_parse_stack.top();        
+        std::string top = m_parse_stack.top();
         if (is_terminal(top)) {
             if (top == m_cur_token->m_parse_key) {
                 m_parse_stack.pop();
@@ -102,7 +102,9 @@ ParseTree* Parser::parse() {
                 m_parse_tree->update_tree_info();
             }
             else
+            {                
                 throw std::runtime_error(sintax_error(top));
+            }                
         }        
     }
 
