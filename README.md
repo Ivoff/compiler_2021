@@ -1,9 +1,10 @@
 # Compilador 1 & 2
-Frontend de compilador faltando análise semântica e geração de código intermediário.
+Frontend de compilador faltando faltando análise semântica, geração de código intermediário, código objeto para máquina hipotética e interpretador
+<del>Frontend de compilador faltando análise semântica e geração de código intermediário.
 A ideia a princípio era fazer um compilador top-down iterativo de uma linguagem LL1. 
 Porém, não deu, então fiz a análise sintática iterativa usando uma tabela de parse e a análise semântica usando recursão.
 Uma escolha que se tornou um tanto quanto agradável, já que eu tinha sempre um nó para passar para um função e não precisava montar os token e analisar as regras semantias simultaneamente.
-O compilador permite você ver a tal da árvore e ,ainda por cima, anotada. Olha só! É bom demais para acreditar né?
+O compilador permite você ver a tal da árvore e ,ainda por cima, anotada. Olha só! É bom demais para acreditar né?</del>
 
 ## TODO:
 
@@ -67,30 +68,51 @@ make && make run > output
 # Conjuntos First e Follow
 ```
 First(<programa>) = {program}
-First(<corpo>) = First(<dc>) U {begin} #dc can be null
+First(<corpo>) = First(<dc>) U {begin} # <dc> can be null
                  First(<dc_v>) 
                  First(<tipo_var>)
                  {real, integer, begin}
-First(<dc>) = First(<dc_v>) U {&}
-              First(<tipo_var>)
-              {real, integer, &}
+First(<dc>) = First(<dc_v>) U First(<dc_p>) U {&}
+              First(<tipo_var>) U {procedure} U {&}
+              {real, integer, procedure, &}
 First(<mais_dc>) = {;, &}
 First(<dc_v>) = First(<tipo_var>)
                 {real, integer}
 First(<tipo_var>) = {real, integer}
 First(<variaveis>) = {ident}
 First(<mais_var>) = {,, &} #primeira vírgula é terminal
+First(<dc_p>) = {procedure}
+First(<parametros>) = {(} U {&}
+                      {(, &}
+First(<lista_par>) = First(<tipo_var>)
+                     {real, integer}
+First(<mais_par>) = {;} U {&}
+                    {;, &}
+First(<corpo_p>) = First(<dc_loc>) U {begin} # <dc_loc> can be null
+                   {real, integer, begin}
+First(<dc_loc>) = First(<dc_v>) U {&}
+                  {real, integer, &}
+First(<mais_dcloc>) = {;, &}
+First(<lista_arg>) = {(} U {&}
+                     {(, &}
+First(<argumentos>) = {ident}
+First(<mais_ident>) = {,} U {&}
+                      {, &}
 First(<comandos>) = First(<comando>)
                     {read, write, ident, if}
 First(<mais_comandos>) = {;, &}
-First(<comando>) = {read, write, ident, if}
+First(<comando>) = {read} U {write} U {if} U {while} U {ident}
+                   {read, write, if, while, ident}
+First(<restoIdent>) = {:=} U First(<lista_arg>)
+                      {:=} U {(, &}
+                      {:=, (, &}
 First(<condicao>) = First(<expressao>)
                     First(<termo>)
                     First(<op_un>) U First(<fator>)
                     {-, ident, numero_int, numero_real, (}
 First(<relacao>) = {=, <>, >=, <=, >, <}
 First(<expressao>) = First(<termo>)
-                     First(<op_un>) U First(<fator>)
+                     First(<op_un>) U First(<fator>) 
                      {-, ident, numero_int, numero_real, (}
 First(<termo>) = First(<op_un>) U First(<fator>)
                  {-, ident, numero_int, numero_real, (}
@@ -99,7 +121,7 @@ First(<fator>) = {ident, numero_int, numero_real, (}
 First(<outros_termos>) = First(op_ad)
                          {+, -, &}
 First(<op_ad>) = {+, -}
-First(<mais_fatores>) = First(<op_mul>)
+First(<mais_fatores>) = First(<op_mul>) U (&)
                         {*, /, &}
 First(<op_mul>) = {*, /}
 First(<pfalsa>) = {else, &}
@@ -111,72 +133,114 @@ Follow(<dc>) = {begin} U Follow(<mais_dc>)
              = {begin}
 Follow(<mais_dc>) = Follow(<dc>)
                   = {begin}
-Follow(<dc_v>) = First(<mais_dc>) U Follow(<mais_dc>)
+Follow(<dc_v>) = First(<mais_dc>) U First(<mais_dcloc>)
+               = {;, &} U Follow(<mais_dc>) U {;, &} U Follow(<mais_dcloc>)
+               = {;, &} U Follow(<dc>) U {;, &} U {begin}
+               = {;, begin} U {;, begin}
                = {;, begin}
 Follow(<tipo_var>) = {:}
-Follow(<variaveis>) = Follow(<dc_v>) U Follow(<mais_var>)
-                    = {;, begin} U Follow(<variaveis>)
-                    = {;, begin} U Follow(<dc_v>)
-                    = {;, begin}
+Follow(<variaveis>) = Follow(<dc_v>) U Follow(<mais_var>) U First(<mais_par>)
+                    = {;, begin} U Follow(<variaveis>) U {;, &} U Follow(<mais_par>)
+                    = {;, begin} U Follow(<mais_par>)
+                    = {;, begin} U {)}
+                    = {;, begin, )}
 Follow(<mais_var>) = Follow(<variaveis>)
-                   = {;, begin}
-Follow(<comandos>) = Follow(<mais_comandos>) U First(<pfalsa>) U Follow(<pfalsa>) U {end}
+                   = {;, begin, )}
+Follow(<dc_p>) = Follow(<dc>)
+                 {begin}
+Follow(<parametros>) = First(<corpo_p>)
+                       {real, integer, &} U Follow(<corpo_p>)
+                       {real, integer, &} U Follow(<dc_p>)
+                       {real, integer, begin}
+Follow(<lista_par>) = {)} U Follow(<mais_par>)
+                      {)} U Follow(<lista_par>)
+                      {)}
+Follow(<mais_par>) = Follow(<lista_par>)
+                     {)}
+Follow(<corpo_p>) = Follow(<dc_p>)
+                    {begin}
+Follow(<dc_loc>) = {begin} U Follow(<mais_dcloc>)
+                   {begin}
+Follow(<mais_dcloc>) = Follow(<dc_loc>)
+                       {begin}
+Follow(<lista_arg>) = Follow(<restoIdent>)
+                      {;, else, $, end}
+Follow(<argumentos>) = {)} U Follow(<mais_ident>)
+                       {)}
+Follow(<mais_ident>) = Follow(<argumentos>)
+                       {)}
+Follow(<comandos>) = Follow(<mais_comandos>) U First(<pfalsa>) U Follow(<pfalsa>) U {end} U {$}
                    = Follow(<comandos>) U {else} U {$} U {end}
                    = {else, $, end}
 Follow(<mais_comandos>) = Follow(<comandos>)
                         = {else, $, end}
 Follow(<comando>) = First(<mais_comandos>)
-                  = {;} U Follow(<mais_comandos>)
-                  = {;, else, $, end}
-Follow(<condicao>) = {then}
+                    {;, &} U Follow(<mais_comandos>)
+                    {;, &} U {else, $, end}
+                    {;, else, $, end}
+Follow(<restoIdent>) = Follow(<comando>)
+                       {;, else, $, end}
+Follow(<condicao>) = {then, do}
 Follow(<relacao>) = First(expressao)
                   = {-, ident, numero_int, numero_real, (}
 Follow(<expressao>) = First(<relacao>) U Follow(<condicao>) U Follow(<comando>) U {)}
                     = {=, <>, >=, <=, >, <} U {then} U {;, else, $, end} U {)}
-                    = {=, <>, >=, <=, >, <, then, ;, else, $, end, )}
+                    = {=, <>, >=, <=, >, <, then, do, ;, else, $, end, )}
 Follow(<termo>) = First(<outros_termos>)
                 = {+, -} U Follow(<outros_termos>)
-                = {+, -, =, <>, >=, <=, >, <, then, ;, else, $, end, )}
+                = {+, -, =, <>, >=, <=, >, <, then, do, ;, else, $, end, )}
 Follow(<op_un>) = First(<fator>)
                 = {ident, numero_int, numero_real, (}
 Follow(<fator>) = First(<mais_fatores>)
                 = {*, /}
 Follow(<outros_termos>) = Follow(<expressao>)
-                        = {=, <>, >=, <=, >, <, then, ;, else, $, end, )}
+                        = {=, <>, >=, <=, >, <, then, do, ;, else, $, end, )}
 Follow(<op_ad>) = First(<termo>)
                 = {-, ident, numero_int, numero_real, (}
 Follow(<mais_fatores>) = Follow(<termo>)
-                       = {+, -, =, <>, >=, <=, >, <, then, ;, else, $, end, )}
+                       = {+, -, =, <>, >=, <=, >, <, then, do, ;, else, $, end, )}
 Follow(<op_mul>) = First(<fator>)
                  = {ident, numero_int, numero_real, (}
 Follow(<pfalsa>) = {$}
 ```
 
 # Tabela de parse
-|NAO TERMINAL |.  |end                 |real                                |integer                             |read                                   |write                                  |if                                                   |(                                              |ident                                          |)                   |:= |;                              |:  |program                              |,                          |then                |$                   |=                   |<\>                  |>=                  |<=                  |\>                   |<                   |-                                                 |numero_int                                     |numero_real                                    |+                                                 |*                                                |/                                                |else                       |begin                               |EOF|
-|-------------|---|--------------------|------------------------------------|------------------------------------|---------------------------------------|---------------------------------------|-----------------------------------------------------|-----------------------------------------------|-----------------------------------------------|--------------------|---|-------------------------------|---|-------------------------------------|---------------------------|--------------------|--------------------|--------------------|--------------------|--------------------|--------------------|--------------------|--------------------|--------------------------------------------------|-----------------------------------------------|-----------------------------------------------|--------------------------------------------------|-------------------------------------------------|-------------------------------------------------|---------------------------|------------------------------------|---|
-|programa     |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |<programa\> -> program ident <corpo\> .|                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |                                    |   |
-|corpo        |   |                    |<corpo\> -> <dc\> begin <comandos\> end|<corpo\> -> <dc\> begin <comandos\> end|                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |<corpo\> -> <dc\> begin <comandos\> end|   |
-|dc           |   |                    |<dc\> -> <dc_v\> <mais_dc\>            |<dc\> -> <dc_v\> <mais_dc\>            |                                       |                                       |                                                     |                                               |                                               |                    |   |<dc\> -> λ                      |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |<dc\> -> λ                           |   |
-|mais_dc      |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |<mais_dc\> -> ; <dc\>            |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |<mais_dc\> -> λ                      |   |
-|dc_v         |   |                    |<dc_v\> ->  <tipo_var\> : <variaveis\> |<dc_v\> ->  <tipo_var\> : <variaveis\> |                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |                                    |   |
-|tipo_var     |   |                    |<tipo_var\> -> real                  |<tipo_var\> -> integer               |                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |                                    |   |
-|variaveis    |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |<variaveis\> -> ident <mais_var\>                |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |                                    |   |
-|mais_var     |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |<mais_var\> -> λ                |   |                                     |<mais_var\> -> , <variaveis\>|                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |<mais_var\> -> λ                     |   |
-|comandos     |   |                    |                                    |                                    |<comandos\> -> <comando\> <mais_comandos\>|<comandos\> -> <comando\> <mais_comandos\>|<comandos\> -> <comando\> <mais_comandos\>              |                                               |<comandos\> -> <comando\> <mais_comandos\>        |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |                                    |   |
-|mais_comandos|   |<mais_comandos\> -> λ|                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |<mais_comandos\> -> ; <comandos\>|   |                                     |                           |                    |<mais_comandos\> -> λ|                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |<mais_comandos\> -> λ       |                                    |   |
-|comando      |   |                    |                                    |                                    |<comando\> -> read (ident)              |<comando\> -> write (ident)             |<comando\> -> if <condicao\> then <comandos\> <pfalsa\> $|                                               |<comando\> -> ident := <expressao\>              |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |                                    |   |
-|condicao     |   |                    |                                    |                                    |                                       |                                       |                                                     |<condicao\> -> <expressao\> <relacao\> <expressao\>|<condicao\> -> <expressao\> <relacao\> <expressao\>|                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |<condicao\> -> <expressao\> <relacao\> <expressao\>   |<condicao\> -> <expressao\> <relacao\> <expressao\>|<condicao\> -> <expressao\> <relacao\> <expressao\>|                                                  |                                                 |                                                 |                           |                                    |   |
-|relacao      |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |                                     |                           |                    |                    |<relacao\> -> =      |<relacao\> -> <\>     |<relacao\> -> >=     |<relacao\> -> <=     |<relacao\> -> >      |<relacao\> -> <      |                                                  |                                               |                                               |                                                  |                                                 |                                                 |                           |                                    |   |
-|expressao    |   |                    |                                    |                                    |                                       |                                       |                                                     |<expressao\> -> <termo\> <outros_termos\>         |<expressao\> -> <termo\> <outros_termos\>         |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |<expressao\> -> <termo\> <outros_termos\>            |<expressao\> -> <termo\> <outros_termos\>         |<expressao\> -> <termo\> <outros_termos\>         |                                                  |                                                 |                                                 |                           |                                    |   |
-|termo        |   |                    |                                    |                                    |                                       |                                       |                                                     |<termo\> -> <op_un\> <fator\> <mais_fatores\>      |<termo\> -> <op_un\> <fator\> <mais_fatores\>      |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |<termo\> -> <op_un\> <fator\> <mais_fatores\>         |<termo\> -> <op_un\> <fator\> <mais_fatores\>      |<termo\> -> <op_un\> <fator\> <mais_fatores\>      |                                                  |                                                 |                                                 |                           |                                    |   |
-|op_un        |   |                    |                                    |                                    |                                       |                                       |                                                     |<op_un\> -> λ                                   |<op_un\> -> λ                                   |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |<op_un\> -> -                                      |<op_un\> -> λ                                   |<op_un\> -> λ                                   |                                                  |                                                 |                                                 |                           |                                    |   |
-|fator        |   |                    |                                    |                                    |                                       |                                       |                                                     |<fator\> -> (<expressao\>)                       |<fator\> -> ident                               |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |<fator\> -> numero_int                          |<fator\> -> numero_real                         |                                                  |                                                 |                                                 |                           |                                    |   |
-|outros_termos|   |<outros_termos\> -> λ|                                    |                                    |                                       |                                       |                                                     |                                               |                                               |<outros_termos\> -> λ|   |<outros_termos\> -> λ           |   |                                     |                           |<outros_termos\> -> λ|<outros_termos\> -> λ|<outros_termos\> -> λ|<outros_termos\> -> λ|<outros_termos\> -> λ|<outros_termos\> -> λ|<outros_termos\> -> λ|<outros_termos\> -> λ|<outros_termos\> -> <op_ad\> <termo\> <outros_termos\>|                                               |                                               |<outros_termos\> -> <op_ad\> <termo\> <outros_termos\>|                                                 |                                                 |<outros_termos\> -> λ       |                                    |   |
-|op_ad        |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |<op_ad\> -> -                                      |                                               |                                               |<op_ad\> -> +                                      |                                                 |                                                 |                           |                                    |   |
-|mais_fatores |   |<mais_fatores\> -> λ |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |<mais_fatores\> -> λ |   |<mais_fatores\> -> λ            |   |                                     |                           |<mais_fatores\> -> λ |<mais_fatores\> -> λ |<mais_fatores\> -> λ |<mais_fatores\> -> λ |<mais_fatores\> -> λ |<mais_fatores\> -> λ |<mais_fatores\> -> λ |<mais_fatores\> -> λ |<mais_fatores\> -> λ                               |                                               |                                               |<mais_fatores\> -> λ                               |<mais_fatores\> -> <op_mul\> <fator\> <mais_fatores\>|<mais_fatores\> -> <op_mul\> <fator\> <mais_fatores\>|<mais_fatores\> -> λ        |                                    |   |
-|op_mul       |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |                                     |                           |                    |                    |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |<op_mul\> -> *                                    |<op_mul\> -> /                                    |                           |                                    |   |
-|pfalsa       |   |                    |                                    |                                    |                                       |                                       |                                                     |                                               |                                               |                    |   |                               |   |                                     |                           |                    |<pfalsa\> -> λ       |                    |                    |                    |                    |                    |                    |                                                  |                                               |                                               |                                                  |                                                 |                                                 |<pfalsa\> -> else <comandos\>|                                    |   |
+| NAO TERMINAL  | . | end                         | real                                               | integer                                            | read                                    | write                                   | if                                                    | (                                               | ident                                           | )                    | :=                             | ;                               | : | program                               | ","                              | then                 | $                           | =                    | <>                   | >=                   | <=                   | >                    | <                    | -                                                  | numero_int                                      | numero_real                                     | +                                                  | *                                                 | /                                                 | else                        | begin                                      | EOF | procedure                                        | while                                         | do |
+|---------------|---|-----------------------------|----------------------------------------------------|----------------------------------------------------|-----------------------------------------|-----------------------------------------|-------------------------------------------------------|-------------------------------------------------|-------------------------------------------------|----------------------|--------------------------------|---------------------------------|---|---------------------------------------|----------------------------------|----------------------|-----------------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------|----------------------------------------------------|-------------------------------------------------|-------------------------------------------------|----------------------------------------------------|---------------------------------------------------|---------------------------------------------------|-----------------------------|--------------------------------------------|-----|--------------------------------------------------|-----------------------------------------------|----|
+| programa      |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   | <programa\> -> program ident <corpo\> . |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| corpo         |   |                             | <corpo\> -> <dc\> begin <comandos\> end               | <corpo\> -> <dc\> begin <comandos\> end               |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <corpo\> -> <dc\> begin <comandos\> end       |     |                                                  |                                               |    |
+| dc            |   |                             | <dc\> -> <dc_v\> <mais_dc\>                           | <dc\> -> <dc_v\> <mais_dc\>                           |                                         |                                         |                                                       |                                                 |                                                 |                      |                                | <dc\> -> λ                       |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <dc\> -> λ                                  |     | <dc\> -> <dc_p\>                                   |                                               |    |
+| mais_dc       |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                | <mais_dc\> -> ; <dc\>             |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <mais_dc\> -> λ                             |     |                                                  |                                               |    |
+| dc_v          |   |                             | <dc_v\> ->  <tipo_var\> : <variaveis\>                | <dc_v\> ->  <tipo_var\> : <variaveis\>                |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| tipo_var      |   |                             | <tipo_var\> -> real                                 | <tipo_var\> -> integer                              |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| variaveis     |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 | <variaveis\> -> ident <mais_var\>                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| mais_var      |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 | <mais_var\> -> λ      |                                | <mais_var\> -> λ                 |   |                                       | "<mais_var\> -> , <variaveis\>"    |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <mais_var\> -> λ                            |     |                                                  |                                               |    |
+| dc_p          |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     | <dc_p\> -> procedure ident <parametros\> <corpo_p\> |                                               |    |
+| parametros    |   |                             | <parametros\> -> λ                                  | <parametros\> -> λ                                  |                                         |                                         |                                                       | <parametros\> -> (<lista_par\>)                   |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <parametros\> -> λ                          |     |                                                  |                                               |    |
+| lista_par     |   |                             | <lista_par\> -> <tipo_var\> : <variaveis\> <mais_par\> | <lista_par\> -> <tipo_var\> : <variaveis\> <mais_par\> |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| mais_par      |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 | <mais_par\> -> λ      |                                | <mais_par\> -> ; <lista_par\>     |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| corpo_p       |   |                             | <corpo_p\> -> <dc_loc\> begin <comandos\> end         | <corpo_p\> -> <dc_loc\> begin <comandos\> end         |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <corpo_p\> -> <dc_loc\> begin <comandos\> end |     |                                                  |                                               |    |
+| dc_loc        |   |                             | <dc_loc\> -> <dc_v\> <mais_dcloc\>                    | <dc_loc\> -> <dc_v\> <mais_dcloc\>                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <dc_loc\> -> λ                              |     |                                                  |                                               |    |
+| mais_dcloc    |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                | <mais_dcloc\> -> ; <dc_loc\>      |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             | <mais_dcloc\> -> λ                          |     |                                                  |                                               |    |
+| lista_arg     |   | <lista_arg\> -> λ            |                                                    |                                                    |                                         |                                         |                                                       | <lista_arg\> -> (<argumentos\>)                   |                                                 |                      |                                | <lista_arg\> -> λ                |   |                                       |                                  |                      | <lista_arg\> -> λ            |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   | <lista_arg\> -> λ            |                                            |     |                                                  |                                               |    |
+| argumentos    |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 | <argumentos\> -> ident <mais_ident\>              |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| mais_ident    |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 | <mais_ident\> -> λ    |                                |                                 |   |                                       | "<mais_ident\> -> , <argumentos\>" |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| comandos      |   |                             |                                                    |                                                    | <comandos\> -> <comando\> <mais_comandos\> | <comandos\> -> <comando\> <mais_comandos\> | <comandos\> -> <comando\> <mais_comandos\>               |                                                 | <comandos\> -> <comando\> <mais_comandos\>         |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  | <comandos\> -> <comando\> <mais_comandos\>       |    |
+| mais_comandos |   | <mais_comandos\> -> λ        |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                | <mais_comandos\> -> ; <comandos\> |   |                                       |                                  |                      | <mais_comandos\> -> λ        |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   | <mais_comandos\> -> λ        |                                            |     |                                                  |                                               |    |
+| comando       |   |                             |                                                    |                                                    | <comando\> -> read (ident)               | <comando\> -> write (ident)              | <comando\> -> if <condicao\> then <comandos\> <pfalsa\> $ |                                                 | <comando\> -> ident <restoIdent\>                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  | <comando\> -> while <condicao\> do <comandos\> $ |    |
+| restoIdent    |   | <restoIdent\> -> <lista_arg\> |                                                    |                                                    |                                         |                                         |                                                       | <restoIdent\> -> <lista_arg\>                     |                                                 |                      | <restoIdent\> -> := <expressao\> | <restoIdent\> -> <lista_arg\>     |   |                                       |                                  |                      | <restoIdent\> -> <lista_arg\> |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   | <restoIdent\> -> <lista_arg\> |                                            |     |                                                  |                                               |    |
+| condicao      |   |                             |                                                    |                                                    |                                         |                                         |                                                       | <condicao\> -> <expressao\> <relacao\> <expressao\> | <condicao\> -> <expressao\> <relacao\> <expressao\> |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      | <condicao\> -> <expressao\> <relacao\> <expressao\>    | <condicao\> -> <expressao\> <relacao\> <expressao\> | <condicao\> -> <expressao\> <relacao\> <expressao\> |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| relacao       |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             | <relacao\> -> =       | <relacao\> -> <>      | <relacao\> -> >=      | <relacao\> -> <=      | <relacao\> -> >       | <relacao\> -> <       |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| expressao     |   |                             |                                                    |                                                    |                                         |                                         |                                                       | <expressao\> -> <termo\> <outros_termos\>          | <expressao\> -> <termo\> <outros_termos\>          |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      | <expressao\> -> <termo\> <outros_termos\>             | <expressao\> -> <termo\> <outros_termos\>          | <expressao\> -> <termo\> <outros_termos\>          |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| termo         |   |                             |                                                    |                                                    |                                         |                                         |                                                       | <termo\> -> <op_un\> <fator\> <mais_fatores\>       | <termo\> -> <op_un\> <fator\> <mais_fatores\>       |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      | <termo\> -> <op_un\> <fator\> <mais_fatores\>          | <termo\> -> <op_un\> <fator\> <mais_fatores\>       | <termo\> -> <op_un\> <fator\> <mais_fatores\>       |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| op_un         |   |                             |                                                    |                                                    |                                         |                                         |                                                       | <op_un\> -> λ                                    | <op_un\> -> λ                                    |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      | <op_un\> -> -                                       | <op_un\> -> λ                                    | <op_un\> -> λ                                    |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| fator         |   |                             |                                                    |                                                    |                                         |                                         |                                                       | <fator\> -> (<expressao\>)                        | <fator\> -> ident                                |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    | <fator\> -> numero_int                           | <fator\> -> numero_real                          |                                                    |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| outros_termos |   | <outros_termos\> -> λ        |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 | <outros_termos\> -> λ |                                | <outros_termos\> -> λ            |   |                                       |                                  | <outros_termos\> -> λ | <outros_termos\> -> λ        | <outros_termos\> -> λ | <outros_termos\> -> λ | <outros_termos\> -> λ | <outros_termos\> -> λ | <outros_termos\> -> λ | <outros_termos\> -> λ | <outros_termos\> -> <op_ad\> <termo\> <outros_termos\> |                                                 |                                                 | <outros_termos\> -> <op_ad\> <termo\> <outros_termos\> |                                                   |                                                   | <outros_termos\> -> λ        |                                            |     |                                                  |                                               |    |
+| op_ad         |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      | <op_ad\> -> -                                       |                                                 |                                                 | <op_ad\> -> +                                       |                                                   |                                                   |                             |                                            |     |                                                  |                                               |    |
+| mais_fatores  |   | <mais_fatores\> -> λ         |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 | <mais_fatores\> -> λ  |                                | <mais_fatores\> -> λ             |   |                                       |                                  | <mais_fatores\> -> λ  | <mais_fatores\> -> λ         | <mais_fatores\> -> λ  | <mais_fatores\> -> λ  | <mais_fatores\> -> λ  | <mais_fatores\> -> λ  | <mais_fatores\> -> λ  | <mais_fatores\> -> λ  | <mais_fatores\> -> λ                                |                                                 |                                                 | <mais_fatores\> -> λ                                | <mais_fatores\> -> <op_mul\> <fator\> <mais_fatores\> | <mais_fatores\> -> <op_mul\> <fator\> <mais_fatores\> | <mais_fatores\> -> λ         |                                            |     |                                                  |                                               |    |
+| op_mul        |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      |                             |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    | <op_mul\> -> *                                     | <op_mul\> -> /                                     |                             |                                            |     |                                                  |                                               |    |
+| pfalsa        |   |                             |                                                    |                                                    |                                         |                                         |                                                       |                                                 |                                                 |                      |                                |                                 |   |                                       |                                  |                      | <pfalsa\> -> λ               |                      |                      |                      |                      |                      |                      |                                                    |                                                 |                                                 |                                                    |                                                   |                                                   | <pfalsa\> -> else <comandos\> |                                            |     |                                                  |                                               |    |
+
 
 # Regras semânticas
 ```
@@ -191,73 +255,216 @@ left_op = operador esquerdo
 right_op = operador direito
 op = operador
 
+Alterações:
+<dc>
+<dc_p>
+<parametros>
+<lista_par>
+<variaveis>
+<mais_var>
+
 <programa> -> program ident <corpo> .
 
-<corpo> ->  <dc> begin 
+{
+   newScope("main") 
+   <dc>.scope = "main"
+}
+<corpo> ->  <dc>
+            begin { <comandos>.scope = <dc>.scope }
             <comandos> { addCode("PARA", "", "", "") }
             end
 
+{    
+   <dc_v>.inh = <dc>.scope
+   <mais_dc>.scope = <dc>.scope
+}
 <dc> -> <dc_v> <mais_dc>
+<dc> -> <dc_p>
 <dc> -> λ
 
-<mais_dc> -> ; <dc> 
+<mais_dc> -> ; { <mais_dc>.scope = <dc>.scope }
+             <dc>
 <mais_dc> -> λ
 
-<dc_v> ->  <tipo_var> {<variaveis>.inh = <tipo_var>.syn}
-           : 
+.inh
+<dc_v> ->  <tipo_var> { <variaveis>.inh = <tipo_var>.syn }
+           :          { <variaveis>.scope = <dc_v>.inh }
            <variaveis>
 
 <tipo_var> -> real {<tipo_var>.syn = "real"}
 <tipo_var> -> integer {<tipo_var>.syn = "integer"}
 
+.scope
 <variaveis> -> ident {
-                        addEntry(ident.syn, <variaveis>.inh);
-                        addCode("ALME", "0.0", "", ident.syn);
+                        [<variaveis>.scope]->addEntry(ident.syn, <variaveis>.inh);
+                        if (<variaveis>.scope != "main")
+                           addArgs(<variaveis>.scope, symbol(ident.syn, <variaveis>.inh))
+                        addCode("ALME", "0.0", "", <variaveis>.scope + ident.syn);
                         <mais_var>.inh = <variaveis>.inh
+                        <mais_var>.scope = <variaveis>.scope
                      }
                <mais_var>
 
-<mais_var> -> , {<variaveis>.inh = <mais_var>.inh} <variaveis>
+.scope
+<mais_var> -> , {
+                  <variaveis>.inh = <mais_var>.inh
+                  <variaveis>.scope = <mais_var>.scope
+                }
+              <variaveis>
 <mais_var> -> λ
 
-<comandos> ->  <comando> { <mais_comandos>.inh = <comando>.end_loc }
+<dc_p> -> procedure
+          ident { 
+                  <dc_p>.scope = ident.syn
+                  newScope(<dc_p>.scope)
+                  <parametros>.inh = <dc_p>.scope
+                }
+         <parametros> { <corpo_p>.scope = <parametros>.inh }
+         <corpo_p>
+
+.inh
+<parametros> -> ( { <lista_par>.scope = <parametros>.inh }
+                <lista_par>
+                )
+<parametros> -> λ
+
+.scope
+<lista_par> -> <tipo_var> {
+                              <variaveis>.inh = <tipo_var>.syn
+                              <variaveis>.scope = <lista_par>.scope
+                          }
+               : 
+               <variaveis> { <mais_par>.scope = <variaveis>.scope }
+               <mais_par>
+
+.scope
+<mais_par> -> ; { <lista_par>.scope = <mais_par>.scope }
+              <lista_par>
+<mais_par> -> λ
+
+.scope
+<corpo_p> -> { <dc_loc>.scope = <corpo_p>.scope }
+            <dc_loc> 
+             begin { <comandos>.scope = <corpo_p>.scope }
+             <comandos>
+             end
+
+.scope
+<dc_loc> -> { <dc_v>.inh = <dc_loc>.scope }
+            <dc_v> { <mais_dcloc>.scope = <dc_loc>.scope }
+            <mais_dcloc>
+<dc_loc> -> λ
+
+<mais_dcloc> -> ; 
+                <dc_loc>
+<mais_dcloc> -> λ
+
+.outer_scope
+.inner_scope
+<lista_arg> -> ( { 
+                     <argumentos>.outer_scope = <lista_arg>.outer_scope 
+                     <argumentos>.inner_scope = <lista_arg>.inner_scope
+                     <argumentos>.counter = 0
+                 }
+               <argumentos> { <lista_arg>.end_loc = <argumentos>.end_loc }
+               )
+<lista_arg> -> λ
+
+.outer_scope
+.inner_scope
+.counter
+<argumentos> -> ident {
+                        if (check(ident) && ident.syn.type == args[<argumentos>.counter].type)
+                        {
+                           addCode(":=", ident.val, "", args[<argumentos>.counter])
+                           <argumentos>.counter += 1
+                           <mais_ident>.counter = <argumentos>.counter
+                        }
+                        else
+                        {
+                           erro()
+                        }
+                      }
+                <mais_ident>
+
+.outer_scope
+.inner_scope
+.counter
+<mais_ident> -> , { 
+                     <argumentos>.outer_scope = <mais_ident>.outer_scope
+                     <argumentos>.inner_scope = <mais_ident>.inner_scope
+                     <argumentos>.counter = <mais_ident>.counter
+                  }
+                <argumentos>
+<mais_ident> -> λ
+
+.scope
+<comandos> ->  { <comando>.scope = <comandos>.scope }
+               <comando> { 
+                           <mais_comandos>.inh = <comando>.end_loc 
+                           <mais_comandos>.scope = <comandos>.scope
+                         }
                <mais_comandos> { <comandos>.end_loc = <mais_comandos>.end_loc }
 
-<mais_comandos> -> ; <comandos> { <mais_comandos>.end_loc = <comandos>.end_loc }
+<mais_comandos> -> { <comandos>.scope = <mais_comandos>.scope }
+                   ; <comandos> { <mais_comandos>.end_loc = <comandos>.end_loc }
 <mais_comandos> -> λ { <mais_comandos>.end_loc = <mais_comandos>.inh }
 
+.scope
 <comando> -> read (ident) {
                               <comando>.end_loc = addCode("read", "", "", ident.syn)
                           }
 <comando> -> write (ident) {
                               <comando>.end_loc = addCode("write", "", "", ident.syn)
                            }
-<comando> -> ident := <expressao> {
-                                    if(<expressao>.syn.type == ident.type) 
-                                    {
-                                       ident.val = <expressao>.syn.val
-                                       <comando>.end_loc = addCode(":=", ident.val, "",)
-                                    }
-                                    else {
-                                       erro();
-                                    }
-                                  }
-<comando> -> if <condicao> then 
+<comando> -> {<condicao>.scope = <comando>.scope }
+             if <condicao> then { <comandos>.scope = <comando>.scope }
                <comandos>  { 
                               if (<pfalsa>->child(0) == "else")
                                  <condicao>.goto_loc = addCode("goto", last_instruction_line, "", "")
                               <pfalsa>.inh = last_instruction_line
+                              <pfalsa>.scope = <scomando>.scope
                            }
                <pfalsa> $
+<comando> -> while {<condicao>.scope = <comando>.scope }
+             <condicao> 
+             do 
+             <comandos> 
+             $
+<comando> -> { <restoIdent>.scope = <comando>.scope }
+             ident <restoIdent> { <comando>.end_loc = <restoIdent>.end_loc }
 
-<condicao> ->  <expressao> { <condicao>.left_op = <expressao>.syn }
+.scope
+.ident
+<restoIdent> -> { <expressao>.scope = <restoIdent>.scope }
+                := <expressao> {
+                                  if(<expressao>.syn.type == <restoIdent>.ident.type)
+                                  {
+                                     ident.val = <expressao>.syn.val
+                                     <restoIdent>.end_loc = addCode(":=", ident.val, "",)
+                                  }
+                                  else {
+                                     erro();
+                                  }
+                               }
+{
+   <lista_arg>.outer_scope = <restoIdent>.scope
+   <lista_arg>.inner_scope = <restoIdent>.ident
+}
+<restoIdent> -> <lista_arg> { <restoIdent>.end_loc = <lista_arg>.end_loc }
+
+.scope
+<condicao> ->  { <expressao>.scope = <condicao>.scope }
+               <expressao> { <condicao>.left_op = <expressao>.syn }
                <relacao> { <condicao>.rel_op = <relacao>.lexval }
                <expressao> { 
                               <condicao>.right_op = <expressao>.syn                               
                               <condicao>.cond_loc = addCode(<condicao>.rel_op, <condicao>.left_op, <condicao>.right_op, geraTemp())
                            }
 
-<pfalsa> -> else <comandos>
+.scope
+<pfalsa> -> else { <comandos>.scope = <pfalsa>.scope }
+            <comandos>
 <pfalsa> -> λ
 
 <relacao> -> = { <relaval>.lexval = "=" }
@@ -267,24 +474,44 @@ op = operador
 <relacao> -> > { <relaval>.lexval = ">" }
 <relacao> -> < { <relaval>.lexval = "<" }
 
-<expressao> -> <termo> { <outros_termos>.inh = <termo>.syn }
+.scope
+<expressao> -> { <termo>.scope = <expressao>.scope }
+               <termo> { 
+                           <outros_termos>.inh = <termo>.syn 
+                           <outros_termos>.scope = <expressao>.scope
+                       }
                <outros_termos> { <expressao>.syn = <outros_termos>.syn }
 
-<termo> -> <op_un> { <fator>.inh = <op_un>.val } 
-           <fator> { <mais_fatores>.inh = <fator>.inh * <fator>.syn } 
+.scope
+<termo> -> <op_un> { 
+                     <fator>.inh = <op_un>.val
+                     <fator>.scope = <termo>.scope
+                   } 
+           <fator> { 
+                     <mais_fatores>.inh = <fator>.inh * <fator>.syn 
+                     <mais_fatores>.scope = <termo>.scope
+                   } 
            <mais_fatores> { <termo>.syn = <mais_fatores>.syn }
 
 <op_un> -> - { <op_un>.val = "-" }
 <op_un> -> λ { <op_un>.val = "" }
 
+.scope
 <fator> -> ident         { <fator>.syn = ident.syn }
 <fator> -> numero_int    { <fator>.syn = numero_int.lexval }
 <fator> -> numero_real   { <fator>.syn = numero_real.lexval }
-<fator> -> (<expressao>) { <fator>.syn = <expressao>.syn }
+<fator> -> { <expressao>.scope = <fator>.scope }
+           (<expressao>) { <fator>.syn = <expressao>.syn }
 
 .inh = <termo>.syn
-<outros_termos> -> <op_ad> { <outros_termos>.op = <op_ad>.lexval }
-                   <termo> { <outros_termos₁>.inh = <termo>.syn }
+<outros_termos> -> <op_ad> { 
+                              <outros_termos>.op = <op_ad>.lexval
+                              <termo>.scope = <outros_termos>.scope
+                           }
+                   <termo> { 
+                              <outros_termos₁>.inh = <termo>.syn 
+                              <outros_termo₁>.scope = <outros_termo>.scope
+                           }
                    <outros_termos₁> {
                                        <outros_termos>.syn = geraTemp();
                                        addCode(<outros_termos>.op, <outros_termos>.inh, <outros_termos₁>.syn, <outros_termos>.syn)
@@ -295,8 +522,14 @@ op = operador
 <op_ad> -> - { <op_ad>.lexval = "-" }
 
 .inh = <fator>.syn
-<mais_fatores> -> <op_mul> { <mais_fatores>.op = <op_mul>.lexval }
-                  <fator> { <mais_fatores₁>.inh = <fator>.syn }
+<mais_fatores> -> <op_mul> { 
+                              <mais_fatores>.op = <op_mul>.lexval 
+                              <fator>.scope = <mais_fatores>.scope
+                           }
+                  <fator> { 
+                              <mais_fatores₁>.inh = <fator>.syn 
+                              <mais_fatores₁>.scope = <mais_fatores>.scope
+                           }
                   <mais_fatores₁> {
                                     <mais_fatores>.syn = geraTemp();
                                     addCode(<mais_fatores>.op, <mais_fatores>.inh, <mais_fatores₁>.syn, <mais_fatores>.syn);

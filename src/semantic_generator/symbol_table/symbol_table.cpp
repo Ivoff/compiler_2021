@@ -13,7 +13,7 @@ void SymbolTable::add_entry(Symbol symbol)
 
 bool SymbolTable::find(std::string name)
 {
-    return m_table.count(name);
+    return m_table.count(name) != 0;
 }
 
 void SymbolTable::print() {
@@ -21,4 +21,77 @@ void SymbolTable::print() {
     {
         printf("%s %s: %s\n", it->second.first.type_to_string().c_str(), it->first.c_str(), it->second.second.c_str());
     }
+}
+
+SymbolTable* Scope::get_scope(std::string scope_id)
+{
+    if (m_symbol_tables.count(scope_id))
+    {
+        return m_symbol_tables[scope_id];
+    }
+    else
+    {
+        throw std::runtime_error("Semantic Error[get_scope]: scope \"" + scope_id + "\" doesn't exist");
+    }
+
+    return nullptr;
+}
+
+SymbolTable* Scope::new_scope(std::string scope_id)
+{
+    if (!m_symbol_tables.count(scope_id))
+    {
+        m_symbol_tables[scope_id] = new SymbolTable();
+        return m_symbol_tables[scope_id];
+    }
+    else 
+    {
+        throw std::runtime_error("Semantic Error[new_scope]: scope already \"" + scope_id + "\" exist");
+    }
+
+    return nullptr;
+}
+
+SymbolTable* Scope::add_to_scope(std::string scope_id, Symbol symbol)
+{
+    if (m_symbol_tables.count(scope_id))
+    {
+        m_symbol_tables[scope_id]->add_entry(symbol);
+        return m_symbol_tables[scope_id];
+    }
+    else
+    {
+        throw std::runtime_error("Semantic Error[add_to_scope]: scope \"" + scope_id + "\" doesn't exist");
+    }
+
+    return nullptr;
+}
+
+SymbolTable* Scope::add_args(std::string scope_id, Symbol symbol)
+{
+    if (m_symbol_tables.count(scope_id))
+    {
+        m_symbol_tables[scope_id]->m_arguments.push_back(symbol);
+        return m_symbol_tables[scope_id];
+    }
+    else
+    {
+        throw std::runtime_error("Semantic Error[add_args]: scope \"" + scope_id + "\" doesn't exist");
+    }
+
+    return nullptr;
+}
+
+bool Scope::find(std::string scope_id, std::string symbol)
+{
+    if (m_symbol_tables.count(scope_id))
+    {                
+        return m_symbol_tables[scope_id]->find(symbol);
+    }
+    else
+    {
+        throw std::runtime_error("Semantic Error[find]: scope \"" + scope_id + "\" doesn't exist");
+    }
+
+    return false;    
 }

@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <exception>
+#include <vector>
 #include "../../misc/type.hpp"
 
 struct Symbol 
@@ -36,6 +37,7 @@ struct Symbol
 struct SymbolTable {
     // par(simbolo, valor)
     std::map<std::string, std::pair<Symbol, std::string >> m_table;
+    std::vector<Symbol> m_arguments;
 
     SymbolTable(){};
     void add_entry(Symbol symbol);
@@ -43,19 +45,17 @@ struct SymbolTable {
     void print();
 };
 
-struct Scope {    
-    SymbolTable* m_symbol_table;    
-    Scope* m_parent_scope;
+struct Scope {
+    // <ident, tabela de símbolos>
+    std::map<std::string, SymbolTable*> m_symbol_tables;
 
-    Scope() {
-        m_parent_scope = nullptr;
-        m_symbol_table = new SymbolTable();        
-    }
+    Scope() {}
 
-    Scope(Scope* parent_scope) {
-        m_parent_scope = parent_scope;
-        m_symbol_table = new SymbolTable();        
-    }
+    SymbolTable* get_scope(std::string scope_id);
+    SymbolTable* new_scope(std::string scope_id);
+    SymbolTable* add_to_scope(std::string scope_id, Symbol symbol);
+    SymbolTable* add_args(std::string scope_id, Symbol symbol);    
+    bool find(std::string scope_id, std::string symbol);
 };
 
 #endif

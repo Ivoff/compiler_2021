@@ -7,15 +7,16 @@
 
 struct RecursiveSemanticAnalyser {
     ParseTree* m_parse_tree;
-    CodeGenerator* m_code_generator;    
+    CodeGenerator* m_code_generator;
     SymbolTable* m_symbol_table;
+    Scope* m_scopes;
 
-    RecursiveSemanticAnalyser(ParseTree* parse_tree, SymbolTable* symbol_table, CodeGenerator* code_generator);
+    RecursiveSemanticAnalyser(ParseTree* parse_tree, Scope* scopes, CodeGenerator* code_generator);
     void analise();
     void programa(Node* cur_node);
     void corpo(Node* cur_node);
     void dc(Node* cur_node);
-    void dc_v(Node* cur_node);
+    void dc_v(Node* cur_node);    
     void tipo_var(Node* cur_node);
     void variaveis(Node* cur_node);
     void mais_dc(Node* cur_node);
@@ -38,6 +39,13 @@ struct RecursiveSemanticAnalyser {
     void parametros(Node* cur_node);
     void lista_par(Node* cur_node);
     void mais_par(Node* cur_node);
+    void corpo_p(Node* cur_node);
+    void dc_loc(Node* cur_node);
+    void mais_dcloc(Node* cur_node);
+    void restoIdent(Node* cur_node);
+    void lista_arg(Node* cur_node);
+    void argumentos(Node* cur_node);
+    void mais_ident(Node* cur_node);
 };
 
 #endif

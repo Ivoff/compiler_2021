@@ -8,28 +8,26 @@
 
 int main() {
     Parser* parser = new Parser("input");    
-    parser->parse();
-    parser->m_parse_tree->print(parser->m_parse_tree->m_root, "");
-    // try {
-    //     SymbolTable* symbol_table = new SymbolTable();
-    //     CodeGenerator* code_generator = new CodeGenerator();
+    
+    try {        
+        Scope* scopes = new Scope();
+        CodeGenerator* code_generator = new CodeGenerator();
 
-    //     RecursiveSemanticAnalyser* analyser = new RecursiveSemanticAnalyser(
-    //         parser->parse(),
-    //         symbol_table,
-    //         code_generator
-    //     );
+        RecursiveSemanticAnalyser* analyser = new RecursiveSemanticAnalyser(
+            parser->parse(),
+            scopes,
+            code_generator
+        );
 
-    //     analyser->analise();
-    //     parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
-    //     code_generator->print();
-    //     // symbol_table->print();
-    // } 
-    // catch (std::runtime_error& ex) {
-    //     std::cerr << "[Runtime error] " << ex.what() << std::endl;
-    //     parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
-    //     std::exit(EXIT_SUCCESS);
-    // }    
+        analyser->analise();
+        parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
+        code_generator->print();        
+    } 
+    catch (std::runtime_error& ex) {
+        std::cerr << "[Runtime error] " << ex.what() << std::endl;
+        parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
+        std::exit(EXIT_SUCCESS);
+    }    
 
     return 0;
 }
