@@ -105,6 +105,9 @@ double Scanner::str_to_real(std::string input) {
         acc *= 10;
     }
 
+    if (fraction_part == 0)
+        return integer_part;
+    
     return integer_part + fraction_part / std::pow(10, (int)std::log10(fraction_part) + 1);
 }
 
@@ -254,7 +257,7 @@ Token* Scanner::next_token() {
                 } 
                 else {
                     m_state = 0;
-                    regress();
+                    regress();                    
                     return new Token(ETokenId::NUMBER_REAL, str_to_real(lexem), "numero_real");
                 }
             break;
