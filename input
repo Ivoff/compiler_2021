@@ -34,6 +34,11 @@ begin
   	write(d)
   else
   	write(c)
+  $;
+  while a > 1 do
+    while b < 2 do
+      a:= a - 1
+    $
   $
   {aqui termina o programa}
 end.

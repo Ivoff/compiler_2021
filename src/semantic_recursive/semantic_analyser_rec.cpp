@@ -616,7 +616,21 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
         {
             m_code_generator->edit(condicao_node->m_attributes["goto_loc"].m_int, 1, std::to_string(m_code_generator->m_cur_line));
         }            
-    } 
+    }
+    else if (first_node->m_head == "while")
+    {
+        auto condicao_node = cur_node->child(1);
+        auto comandos_node = cur_node->child(3);
+
+        cur_node->m_attributes["cond_begin"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
+
+        condicao_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
+        condicao(condicao_node);
+        comandos_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
+        comandos(comandos_node);
+        m_code_generator->add_code("goto", std::to_string(cur_node->m_attributes["cond_begin"].m_int), "", "");
+        m_code_generator->edit(condicao_node->m_attributes["jump_loc"].m_int, 2, std::to_string(m_code_generator->m_cur_line));
+    }    
 
     return;
 }
