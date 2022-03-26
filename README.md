@@ -1,10 +1,10 @@
 # Compilador 1 & 2
 Frontend de compilador faltando faltando análise semântica, geração de código intermediário, código objeto para máquina hipotética e interpretador
-<del>Frontend de compilador faltando análise semântica e geração de código intermediário.
+Frontend de compilador faltando análise semântica e geração de código intermediário.
 A ideia a princípio era fazer um compilador top-down iterativo de uma linguagem LL1. 
 Porém, não deu, então fiz a análise sintática iterativa usando uma tabela de parse e a análise semântica usando recursão.
 Uma escolha que se tornou um tanto quanto agradável, já que eu tinha sempre um nó para passar para um função e não precisava montar os token e analisar as regras semantias simultaneamente.
-O compilador permite você ver a tal da árvore e ,ainda por cima, anotada. Olha só! É bom demais para acreditar né?</del>
+O compilador permite você ver a tal da árvore e ,ainda por cima, anotada. Olha só! É bom demais para acreditar né?
 
 ## TODO:
 
@@ -12,7 +12,7 @@ O compilador permite você ver a tal da árvore e ,ainda por cima, anotada. Olha
    - [x] atualizar conjuntos First e Follow
       - [x] documentar o que foi alterado
    - [x] atualizar tabela de parse
-   - [ ] atualizar regras semanticas
+   - [x] atualizar regras semanticas
    - [ ] implementar conversor de quadrupla pra código objeto de máquina hipotética
 - [ ] fazer umas mensagens de erro melhores
 - [ ] remover coisas inúteis do código como o id dos tokens já que o parse é feito diretamente comparando o próprio lexema
@@ -35,20 +35,38 @@ make && make run > output
 ```
 # Gramática
 ```
+Especificação da Sintaxe da Linguagem LALG
+- Comentários na LALG: entre { } ou /* */
+
+
 <programa> -> program ident <corpo> .
 <corpo> -> <dc> begin <comandos> end
-<dc> -> <dc_v> <mais_dc>  | λ
+<dc> -> <dc_v> <mais_dc> | <dc_p> | λ
 <mais_dc> -> ; <dc> | λ
 <dc_v> ->  <tipo_var> : <variaveis>
 <tipo_var> -> real | integer
 <variaveis> -> ident <mais_var>
 <mais_var> -> , <variaveis> | λ
+<dc_p> -> procedure ident <parametros> <corpo_p>
+<parametros> -> (<lista_par>) | λ
+<lista_par> -> <tipo_var> : <variaveis> <mais_par>
+<mais_par> -> ; <lista_par> | λ
+<corpo_p> -> <dc_loc> begin <comandos> end
+<dc_loc> -> <dc_v> <mais_dcloc> | λ
+<mais_dcloc> -> ; <dc_loc> | λ
+<lista_arg> -> (<argumentos>) | λ
+<argumentos> -> ident <mais_ident>
+<mais_ident> -> , <argumentos> | λ
 <comandos> -> <comando> <mais_comandos>
 <mais_comandos> -> ; <comandos> | λ
+
 <comando> -> read (ident) |
-			 write (ident) |
-			 ident := <expressao> |
-			 if <condicao> then <comandos> <pfalsa> $							
+						 write (ident) |
+						 if <condicao> then <comandos> <pfalsa> $ |
+						 while <condicao> do <comandos> $ |
+						 ident <restoIdent>
+							
+<restoIdent> -> := <expressao> | <lista_arg>
 <condicao> -> <expressao> <relacao> <expressao>
 <relacao> -> = | <> | >= | <= | > | <
 <expressao> -> <termo> <outros_termos>
@@ -254,6 +272,10 @@ goto_loc = linha da instrução de goto, existe somente se o if tem um else
 left_op = operador esquerdo
 right_op = operador direito
 op = operador
+cond_begin = linha de instrução do início da expressão usada na condição
+
+outros:
+last_instruction_line = última linha do gerador de código
 
 Alterações:
 <dc>
@@ -266,11 +288,15 @@ Alterações:
 <programa> -> program ident <corpo> .
 
 {
-   newScope("main") 
+   new Scope("main") 
+   new codeGen("main")
    <dc>.scope = "main"
 }
 <corpo> ->  <dc>
-            begin { <comandos>.scope = <dc>.scope }
+            begin { 
+                     <comandos>.scope = <dc>.scope 
+                     codeGen = codeGen["main"]
+                  }
             <comandos> { addCode("PARA", "", "", "") }
             end
 
@@ -278,7 +304,8 @@ Alterações:
    <dc_v>.inh = <dc>.scope
    <mais_dc>.scope = <dc>.scope
 }
-<dc> -> <dc_v> <mais_dc>
+<dc> -> { codeGen = codeGen["main"] }
+        <dc_v> <mais_dc>
 <dc> -> <dc_p>
 <dc> -> λ
 
@@ -295,13 +322,19 @@ Alterações:
 <tipo_var> -> integer {<tipo_var>.syn = "integer"}
 
 .scope
+.inh (type)
+.args (optional)
 <variaveis> -> ident {
                         [<variaveis>.scope]->addEntry(ident.syn, <variaveis>.inh);
-                        if (<variaveis>.scope != "main")
+                        
+                        if (<variaveis>.scope != "main" && <variaveis>.args == "true")
                            addArgs(<variaveis>.scope, symbol(ident.syn, <variaveis>.inh))
-                        addCode("ALME", "0.0", "", <variaveis>.scope + ident.syn);
+                        
+                        addCode("ALME", "0.0", "", <variaveis>.scope + "_" + ident.syn);
+                        
                         <mais_var>.inh = <variaveis>.inh
                         <mais_var>.scope = <variaveis>.scope
+                        <mais_var>.args = <variaveis>.args
                      }
                <mais_var>
 
@@ -309,6 +342,7 @@ Alterações:
 <mais_var> -> , {
                   <variaveis>.inh = <mais_var>.inh
                   <variaveis>.scope = <mais_var>.scope
+                  <variaveis>.args = <mais_var>.args
                 }
               <variaveis>
 <mais_var> -> λ
@@ -316,11 +350,13 @@ Alterações:
 <dc_p> -> procedure
           ident { 
                   <dc_p>.scope = ident.syn
-                  newScope(<dc_p>.scope)
+                  new Scope(<dc_p>.scope)
+                  new codeGen(<dc_p>.scope)
+                  codeGen = codeGen[<dc_p>.scope]
                   <parametros>.inh = <dc_p>.scope
                 }
          <parametros> { <corpo_p>.scope = <parametros>.inh }
-         <corpo_p>
+         <corpo_p> { eraseScope(<dc_p>.scope) }
 
 .inh
 <parametros> -> ( { <lista_par>.scope = <parametros>.inh }
@@ -332,6 +368,7 @@ Alterações:
 <lista_par> -> <tipo_var> {
                               <variaveis>.inh = <tipo_var>.syn
                               <variaveis>.scope = <lista_par>.scope
+                              <variaveis>.args = "true"
                           }
                : 
                <variaveis> { <mais_par>.scope = <variaveis>.scope }
@@ -368,7 +405,7 @@ Alterações:
                  }
                <argumentos> { <lista_arg>.end_loc = <argumentos>.end_loc }
                )
-<lista_arg> -> λ
+<lista_arg> -> λ { <lista_arg>.end_loc = last_instruction_line }
 
 .outer_scope
 .inner_scope
@@ -426,13 +463,20 @@ Alterações:
                               <pfalsa>.scope = <scomando>.scope
                            }
                <pfalsa> $
-<comando> -> while {<condicao>.scope = <comando>.scope }
+<comando> -> { <comando>.cond_begin = last_instruction_line }
+             while { <condicao>.scope = <comando>.scope }
              <condicao> 
-             do 
-             <comandos> 
+             do { <comandos>.scope = <comando>.scope }
+             <comandos> { 
+                           addCode("goto", <comando>.cond_begin, "", "")
+                           
+                        }
              $
-<comando> -> { <restoIdent>.scope = <comando>.scope }
-             ident <restoIdent> { <comando>.end_loc = <restoIdent>.end_loc }
+<comando> -> ident { 
+                     <restoIdent>.scope = <comando>.scope 
+                     <restoIdent>.ident = ident.syn
+                   }
+             <restoIdent> { <comando>.end_loc = <restoIdent>.end_loc }
 
 .scope
 .ident
@@ -451,7 +495,10 @@ Alterações:
    <lista_arg>.outer_scope = <restoIdent>.scope
    <lista_arg>.inner_scope = <restoIdent>.ident
 }
-<restoIdent> -> <lista_arg> { <restoIdent>.end_loc = <lista_arg>.end_loc }
+<restoIdent> -> <lista_arg> { 
+                              <restoIdent>.end_loc = <lista_arg>.end_loc 
+                              eraseScope(<restoIdent>.ident)
+                            }
 
 .scope
 <condicao> ->  { <expressao>.scope = <condicao>.scope }
@@ -542,33 +589,65 @@ Alterações:
 
 # Output de exemplo a partir do input de exemplo
 ```
-000; ALME; 0.0; ; a
-001; ALME; 0.0; ; b
-002; ALME; 0; ; c
-003; ALME; 0; ; d
-004; read; ; ; a
-005; read; ; ; c
-006; *; a; a; t1
-007; +; t1; a; t2
-008; :=; t2; ; b
-009; *; -2; c; t3
-010; +; t3; c; t4
-011; :=; t4; ; d
-012; >; a; b; t5
-013; JF; t5; 16; 
-014; write; a; ; 
-015; goto; 17; ; 
-016; write; b; ; 
-017; <; d; c; t6
-018; JF; t6; 21; 
-019; write; d; ; 
-020; goto; 22; ; 
-021; write; c; ; 
-022; PARA; ; ; 
+000| PROCEDURE|     main|       |        
+001|      ALME|      0.0|       |  main_a
+002|      ALME|      0.0|       |  main_b
+003|      ALME|        0|       |  main_c
+004|      ALME|        0|       |  main_d
+005|      read|         |       |  main_a
+006|      read|         |       |  main_c
+007|         *|   main_a| main_a| main_t1
+008|         +|  main_t1| main_a| main_t2
+009|        :=|  main_t2|       |  main_b
+010|         *|        2| main_c| main_t3
+011|         +|  main_t3| main_c| main_t4
+012|        :=|  main_t4|       |  main_d
+013|         >|   main_a| main_b| main_t5
+014|        JF|  main_t5|     17|        
+015|     write|   main_a|       |        
+016|      goto|       18|       |        
+017|     write|   main_b|       |        
+018| PROCEDURE|       um|       |        
+019|      ALME|   main_a|       |    um_a
+020|      ALME|   main_b|       |    um_g
+021|      ALME|   main_c|       |    um_d
+022|      ALME|   main_d|       |    um_c
+023|      ALME|      0.0|       |    um_h
+024|      ALME|      0.0|       |    um_i
+025|      ALME|      0.0|       |    um_j
+026|      ALME|        0|       |    um_l
+027|        :=| 2.000000|       |    um_h
+028|         /| 3.400000|   um_h|   um_t1
+029|         +|     um_g|  um_t1|   um_t2
+030|        :=|    um_t2|       |    um_a
+031|         *|     um_d|      2|   um_t3
+032|         -|     um_c|  um_t3|   um_t4
+033|        :=|    um_t4|       |    um_l
+034|         +|     um_c|   um_d|   um_t5
+035|        >=|    um_t5|      5|   um_t6
+036|        JF|    um_t6|     21|        
+037|     write|     um_a|       |        
+038|      goto|       22|       |        
+039|     write|     um_l|       |        
+040|      PARA|         |       |        
+041|         <|   main_d| main_c| main_t6
+042|        JF|  main_t6|     45|        
+043|     write|   main_d|       |        
+044|      goto|       46|       |        
+045|     write|   main_c|       |        
+046|         >|   main_a|      1| main_t7
+047|        JF|  main_t7|     54|        
+048|         <|   main_b|      2| main_t8
+049|        JF|  main_t8|     53|        
+050|         -|   main_a|      1| main_t9
+051|        :=|  main_t9|       |  main_a
+052|      goto|       48|       |        
+053|      goto|       46|       |        
+054|      PARA|         |       |        
 
 ```
 
-# Árvore de parse anotada
+# Árvore de parse anotada (gerada a partir input de exemplo)
 obviamente as anotações seguem as regras semânticas
 ```
 <programa>
@@ -576,364 +655,1227 @@ obviamente as anotações seguem as regras semânticas
 |- ident -> teste
 |- <corpo>
 |- |- <dc>
+|- |- [attr] <dc>.scope = main (string)
 |- |- |- <dc_v>
+|- |- |- [attr] <dc_v>.inh = main (string)
 |- |- |- |- <tipo_var>
 |- |- |- |- [attr] <tipo_var>.syn = real (string)
 |- |- |- |- |- real -> real
 |- |- |- |- : -> :
 |- |- |- |- <variaveis>
+|- |- |- |- [attr] <variaveis>.args = {null} (string)
 |- |- |- |- [attr] <variaveis>.inh = real (string)
+|- |- |- |- [attr] <variaveis>.scope = main (string)
 |- |- |- |- |- ident -> a
 |- |- |- |- |- <mais_var>
+|- |- |- |- |- [attr] <mais_var>.args = {null} (string)
 |- |- |- |- |- [attr] <mais_var>.inh = real (string)
+|- |- |- |- |- [attr] <mais_var>.scope = main (string)
 |- |- |- |- |- |- , -> ,
 |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- [attr] <variaveis>.args = {null} (string)
 |- |- |- |- |- |- [attr] <variaveis>.inh = real (string)
+|- |- |- |- |- |- [attr] <variaveis>.scope = main (string)
 |- |- |- |- |- |- |- ident -> b
 |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- [attr] <mais_var>.args = {null} (string)
 |- |- |- |- |- |- |- [attr] <mais_var>.inh = real (string)
+|- |- |- |- |- |- |- [attr] <mais_var>.scope = main (string)
 |- |- |- |- |- |- |- |- &
 |- |- |- <mais_dc>
+|- |- |- [attr] <mais_dc>.scope = main (string)
 |- |- |- |- ; -> ;
 |- |- |- |- <dc>
+|- |- |- |- [attr] <dc>.scope = main (string)
 |- |- |- |- |- <dc_v>
+|- |- |- |- |- [attr] <dc_v>.inh = main (string)
 |- |- |- |- |- |- <tipo_var>
 |- |- |- |- |- |- [attr] <tipo_var>.syn = integer (string)
 |- |- |- |- |- |- |- integer -> integer
 |- |- |- |- |- |- : -> :
 |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- [attr] <variaveis>.args = {null} (string)
 |- |- |- |- |- |- [attr] <variaveis>.inh = integer (string)
+|- |- |- |- |- |- [attr] <variaveis>.scope = main (string)
 |- |- |- |- |- |- |- ident -> c
 |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- [attr] <mais_var>.args = {null} (string)
 |- |- |- |- |- |- |- [attr] <mais_var>.inh = integer (string)
+|- |- |- |- |- |- |- [attr] <mais_var>.scope = main (string)
 |- |- |- |- |- |- |- |- , -> ,
 |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- [attr] <variaveis>.args = {null} (string)
 |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = integer (string)
+|- |- |- |- |- |- |- |- [attr] <variaveis>.scope = main (string)
 |- |- |- |- |- |- |- |- |- ident -> d
 |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = {null} (string)
 |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = integer (string)
+|- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- <mais_dc>
+|- |- |- |- |- [attr] <mais_dc>.scope = main (string)
 |- |- |- |- |- |- ; -> ;
 |- |- |- |- |- |- <dc>
-|- |- |- |- |- |- |- &
+|- |- |- |- |- |- [attr] <dc>.scope = main (string)
+|- |- |- |- |- |- |- <dc_p>
+|- |- |- |- |- |- |- [attr] <dc_p>.scope = um (string)
+|- |- |- |- |- |- |- |- procedure -> procedure
+|- |- |- |- |- |- |- |- ident -> um
+|- |- |- |- |- |- |- |- <parametros>
+|- |- |- |- |- |- |- |- [attr] <parametros>.inh = um (string)
+|- |- |- |- |- |- |- |- |- ( -> (
+|- |- |- |- |- |- |- |- |- <lista_par>
+|- |- |- |- |- |- |- |- |- [attr] <lista_par>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- <tipo_var>
+|- |- |- |- |- |- |- |- |- |- [attr] <tipo_var>.syn = real (string)
+|- |- |- |- |- |- |- |- |- |- |- real -> real
+|- |- |- |- |- |- |- |- |- |- : -> :
+|- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- , -> ,
+|- |- |- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- ident -> g
+|- |- |- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- <mais_par>
+|- |- |- |- |- |- |- |- |- |- [attr] <mais_par>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- ; -> ;
+|- |- |- |- |- |- |- |- |- |- |- <lista_par>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <lista_par>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- <tipo_var>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <tipo_var>.syn = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- integer -> integer
+|- |- |- |- |- |- |- |- |- |- |- |- : -> :
+|- |- |- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
+|- |- |- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- , -> ,
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = true (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- <mais_par>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_par>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- ) -> )
+|- |- |- |- |- |- |- |- <corpo_p>
+|- |- |- |- |- |- |- |- [attr] <corpo_p>.scope = um (string)
+|- |- |- |- |- |- |- |- |- <dc_loc>
+|- |- |- |- |- |- |- |- |- [attr] <dc_loc>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- <dc_v>
+|- |- |- |- |- |- |- |- |- |- [attr] <dc_v>.inh = um (string)
+|- |- |- |- |- |- |- |- |- |- |- <tipo_var>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <tipo_var>.syn = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- real -> real
+|- |- |- |- |- |- |- |- |- |- |- : -> :
+|- |- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- ident -> h
+|- |- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- , -> ,
+|- |- |- |- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> i
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- , -> ,
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> j
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = real (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- <mais_dcloc>
+|- |- |- |- |- |- |- |- |- |- [attr] <mais_dcloc>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- ; -> ;
+|- |- |- |- |- |- |- |- |- |- |- <dc_loc>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <dc_loc>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- <dc_v>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <dc_v>.inh = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- <tipo_var>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <tipo_var>.syn = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- integer -> integer
+|- |- |- |- |- |- |- |- |- |- |- |- |- : -> :
+|- |- |- |- |- |- |- |- |- |- |- |- |- <variaveis>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.inh = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <variaveis>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> l
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_var>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.args = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.inh = integer (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_var>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- <mais_dcloc>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_dcloc>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- begin -> begin
+|- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 10 (integer)
+|- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- ident -> h
+|- |- |- |- |- |- |- |- |- |- |- <restoIdent>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.end_loc = 9 (integer)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.ident = h (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- := -> :=
+|- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = 2.000000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = 2.000000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 2.000000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_real -> 2.000000
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 2.000000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = 2.000000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = 2.000000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = 2.000000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 10 (integer)
+|- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- ; -> ;
+|- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 13 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- |- <restoIdent>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.end_loc = 12 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.ident = a (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- := -> :=
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t2 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = g (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = g (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> g
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = g (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = g (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = g (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = + (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t2 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_ad>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = + (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- + -> +
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = t1 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 3.400000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_real -> 3.400000
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 3.400000 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.op = / (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = t1 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_mul>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_mul>.lexval = / (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- / -> /
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = h (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> h
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = h (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = h (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = t1 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t1 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 13 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- ; -> ;
+|- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> l
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <restoIdent>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.end_loc = 15 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.ident = l (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- := -> :=
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t4 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = - (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t4 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_ad>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = - (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- - -> -
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = t3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.op = * (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = t3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_mul>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_mul>.lexval = * (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- * -> *
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_int -> 2
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = t3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ; -> ;
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- if -> if
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <condicao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.goto_loc = 20 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.jump_loc = 18 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.left_op = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.rel_op = >= (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.right_op = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.syn = t6 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = + (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_ad>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = + (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- + -> +
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <relacao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <relacao>.lexval = >= (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- >= -> >=
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_int -> 5
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = 5 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- then -> then
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 20 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 19 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 20 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 20 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <pfalsa>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.inh = 21 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- else -> else
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 21 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> l
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- $ -> $
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 22 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- end -> end
 |- |- begin -> begin
 |- |- <comandos>
-|- |- [attr] <comandos>.end_loc = 4 (integer)
+|- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- [attr] <comandos>.scope = main (string)
 |- |- |- <comando>
-|- |- |- [attr] <comando>.end_loc = 4 (integer)
+|- |- |- [attr] <comando>.end_loc = 5 (integer)
+|- |- |- [attr] <comando>.scope = main (string)
 |- |- |- |- read -> read
 |- |- |- |- ( -> (
 |- |- |- |- ident -> a
 |- |- |- |- ) -> )
 |- |- |- <mais_comandos>
-|- |- |- [attr] <mais_comandos>.end_loc = 4 (integer)
-|- |- |- [attr] <mais_comandos>.inh = 4 (integer)
+|- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- [attr] <mais_comandos>.inh = 6 (integer)
+|- |- |- [attr] <mais_comandos>.scope = main (string)
 |- |- |- |- ; -> ;
 |- |- |- |- <comandos>
-|- |- |- |- [attr] <comandos>.end_loc = 5 (integer)
+|- |- |- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- |- |- [attr] <comandos>.scope = main (string)
 |- |- |- |- |- <comando>
-|- |- |- |- |- [attr] <comando>.end_loc = 5 (integer)
+|- |- |- |- |- [attr] <comando>.end_loc = 6 (integer)
+|- |- |- |- |- [attr] <comando>.scope = main (string)
 |- |- |- |- |- |- read -> read
 |- |- |- |- |- |- ( -> (
 |- |- |- |- |- |- ident -> c
 |- |- |- |- |- |- ) -> )
 |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- [attr] <mais_comandos>.end_loc = 5 (integer)
-|- |- |- |- |- [attr] <mais_comandos>.inh = 5 (integer)
+|- |- |- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- |- |- [attr] <mais_comandos>.inh = 7 (integer)
+|- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
 |- |- |- |- |- |- ; -> ;
 |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- [attr] <comandos>.end_loc = 8 (integer)
+|- |- |- |- |- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- [attr] <comandos>.scope = main (string)
 |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- [attr] <comando>.end_loc = 8 (integer)
+|- |- |- |- |- |- |- [attr] <comando>.end_loc = 10 (integer)
+|- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
 |- |- |- |- |- |- |- |- ident -> b
-|- |- |- |- |- |- |- |- := -> :=
-|- |- |- |- |- |- |- |- <expressao>
-|- |- |- |- |- |- |- |- [attr] <expressao>.syn = t2 (real)
-|- |- |- |- |- |- |- |- |- <termo>
-|- |- |- |- |- |- |- |- |- [attr] <termo>.syn = t1 (real)
-|- |- |- |- |- |- |- |- |- |- <op_un>
-|- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- <fator>
-|- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
-|- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
-|- |- |- |- |- |- |- |- |- |- |- ident -> a
-|- |- |- |- |- |- |- |- |- |- <mais_fatores>
-|- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
-|- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.op = * (string)
-|- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = t1 (real)
-|- |- |- |- |- |- |- |- |- |- |- <op_mul>
-|- |- |- |- |- |- |- |- |- |- |- [attr] <op_mul>.lexval = * (string)
-|- |- |- |- |- |- |- |- |- |- |- |- * -> *
-|- |- |- |- |- |- |- |- |- |- |- <fator>
-|- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
-|- |- |- |- |- |- |- |- |- |- |- |- ident -> a
-|- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
-|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
-|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = a (real)
-|- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- <outros_termos>
-|- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = t1 (real)
-|- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = + (string)
-|- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t2 (real)
-|- |- |- |- |- |- |- |- |- |- <op_ad>
-|- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = + (string)
-|- |- |- |- |- |- |- |- |- |- |- + -> +
+|- |- |- |- |- |- |- |- <restoIdent>
+|- |- |- |- |- |- |- |- [attr] <restoIdent>.end_loc = 9 (integer)
+|- |- |- |- |- |- |- |- [attr] <restoIdent>.ident = b (string)
+|- |- |- |- |- |- |- |- [attr] <restoIdent>.scope = main (string)
+|- |- |- |- |- |- |- |- |- := -> :=
+|- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t2 (real)
 |- |- |- |- |- |- |- |- |- |- <termo>
-|- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = t1 (real)
 |- |- |- |- |- |- |- |- |- |- |- <op_un>
 |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
 |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- <fator>
 |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
 |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
 |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
 |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
-|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = a (real)
-|- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.op = * (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = t1 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- <op_mul>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_mul>.lexval = * (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- * -> *
+|- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- <outros_termos>
-|- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = a (real)
-|- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = a (real)
-|- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = t1 (real)
+|- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = + (string)
+|- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t2 (real)
+|- |- |- |- |- |- |- |- |- |- |- <op_ad>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = + (string)
+|- |- |- |- |- |- |- |- |- |- |- |- + -> +
+|- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 8 (integer)
-|- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 8 (integer)
+|- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 10 (integer)
+|- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- ; -> ;
 |- |- |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 11 (integer)
+|- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 11 (integer)
+|- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 13 (integer)
+|- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- ident -> d
-|- |- |- |- |- |- |- |- |- |- := -> :=
-|- |- |- |- |- |- |- |- |- |- <expressao>
-|- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t4 (integer)
-|- |- |- |- |- |- |- |- |- |- |- <termo>
-|- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = t3 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- <op_un>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = - (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- - -> -
-|- |- |- |- |- |- |- |- |- |- |- |- <fator>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = - (string)
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = -2 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- numero_int -> 2
-|- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = -2 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.op = * (string)
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = t3 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- <op_mul>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_mul>.lexval = * (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- * -> *
-|- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
-|- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- <outros_termos>
-|- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = t3 (integer)
-|- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = + (string)
-|- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t4 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- <op_ad>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = + (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- + -> +
+|- |- |- |- |- |- |- |- |- |- <restoIdent>
+|- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.end_loc = 12 (integer)
+|- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.ident = d (string)
+|- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- := -> :=
+|- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t4 (integer)
 |- |- |- |- |- |- |- |- |- |- |- |- <termo>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = t3 (integer)
 |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
 |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
 |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_int -> 2
 |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.op = * (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = t3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_mul>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_mul>.lexval = * (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- * -> *
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = t3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = + (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t4 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- <op_ad>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = + (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- + -> +
+|- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 11 (integer)
-|- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 11 (integer)
+|- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 13 (integer)
+|- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- ; -> ;
 |- |- |- |- |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = {null} (string)
+|- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- if -> if
 |- |- |- |- |- |- |- |- |- |- |- |- <condicao>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.goto_loc = 15 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.jump_loc = 13 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.goto_loc = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.jump_loc = 14 (integer)
 |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.left_op = a (real)
 |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.rel_op = > (string)
 |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.right_op = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.syn = t5 (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = a (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = a (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = a (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = a (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- |- <relacao>
 |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <relacao>.lexval = > (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- > -> >
 |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = b (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = b (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = b (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> b
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = b (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = b (real)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- then -> then
 |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 14 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 14 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 15 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
 |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 14 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 14 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- <pfalsa>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.end_loc = 16 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.inh = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.end_loc = 18 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.inh = 17 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- else -> else
 |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 18 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 17 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> b
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 16 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 16 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 18 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 18 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- $ -> $
 |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 18 (integer)
+|- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- ; -> ;
 |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- if -> if
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- <condicao>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.goto_loc = 20 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.jump_loc = 18 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.left_op = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.rel_op = < (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.right_op = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.syn = t6 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = d (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <relacao>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <relacao>.lexval = < (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- < -> <
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = c (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- then -> then
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 19 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 19 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 41 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> um
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <restoIdent>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.end_loc = 41 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.ident = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <lista_arg>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <lista_arg>.end_loc = 23 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <lista_arg>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <lista_arg>.outer_scope = main (string)
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <argumentos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.counter = {null} (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.end_loc = 23 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_ident>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.counter = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- , -> ,
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <argumentos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.counter = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.end_loc = 23 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> b
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_ident>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.counter = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- , -> ,
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <argumentos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.counter = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.end_loc = 23 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_ident>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.counter = 3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- , -> ,
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <argumentos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.counter = 3 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.end_loc = 23 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <argumentos>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_ident>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.counter = 4 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.inner_scope = um (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_ident>.outer_scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 19 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 19 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- <pfalsa>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.end_loc = 21 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.inh = 21 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- else -> else
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 21 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 21 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 21 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 21 (integer)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- $ -> $
 |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = {null} (string)
-|- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 41 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- ; -> ;
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- if -> if
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <condicao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.goto_loc = 44 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.jump_loc = 42 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.left_op = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.rel_op = < (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.right_op = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.syn = t6 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = d (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <relacao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <relacao>.lexval = < (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- < -> <
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = c (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- then -> then
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 44 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 43 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> d
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 44 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 44 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <pfalsa>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.end_loc = 46 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.inh = 45 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <pfalsa>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- else -> else
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 46 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 45 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- write -> write
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ( -> (
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> c
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ) -> )
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 46 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 46 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- $ -> $
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 46 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ; -> ;
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.cond_begin = 46 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- while -> while
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <condicao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.jump_loc = 47 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.left_op = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.rel_op = > (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.right_op = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.syn = t7 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <relacao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <relacao>.lexval = > (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- > -> >
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_int -> 1
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- do -> do
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 53 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.cond_begin = 48 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- while -> while
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <condicao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.jump_loc = 49 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.left_op = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.rel_op = < (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.right_op = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <condicao>.syn = t8 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> b
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = b (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <relacao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <relacao>.lexval = < (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- < -> <
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_int -> 2
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = 2 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- do -> do
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.end_loc = 52 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <comando>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.end_loc = 52 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <comando>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <restoIdent>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.end_loc = 51 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.ident = a (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <restoIdent>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- := -> :=
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <expressao>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <expressao>.syn = t9 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- ident -> a
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = a (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.op = - (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = t9 (real)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_ad>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_ad>.lexval = - (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- - -> -
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <termo>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <termo>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <op_un>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <op_un>.val = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <fator>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.inh = {null} (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <fator>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- numero_int -> 1
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_fatores>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.inh = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_fatores>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <outros_termos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.inh = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <outros_termos>.syn = 1 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 52 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 52 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- $ -> $
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 53 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 53 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- $ -> $
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- <mais_comandos>
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.end_loc = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.inh = 54 (integer)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- [attr] <mais_comandos>.scope = main (string)
+|- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- |- &
 |- |- end -> end
 |- . -> .
 ```
