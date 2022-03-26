@@ -1,8 +1,7 @@
 #include "semantic_analyser_rec.hpp"
 
-RecursiveSemanticAnalyser::RecursiveSemanticAnalyser(ParseTree* parse_tree, Scope* scopes, CodeGenerator* code_generator) {
+RecursiveSemanticAnalyser::RecursiveSemanticAnalyser(ParseTree* parse_tree, Scope* scopes) {
     m_parse_tree = parse_tree;
-    m_code_generator = code_generator;
     m_scopes = scopes;
 
     if (!m_parse_tree->m_tree_stack.empty()) 
@@ -22,6 +21,15 @@ std::string RecursiveSemanticAnalyser::add_prefix(std::string scope_id, std::str
     }
 
     return scope_id + "_" + op;
+}
+
+void RecursiveSemanticAnalyser::print_procedures()
+{
+    for(auto it = m_procedures.begin(); it != m_procedures.end(); ++it)
+    {
+        printf("%s\n", it->first.c_str());
+        it->second->print();
+    }
 }
 
 /*
@@ -68,7 +76,8 @@ void RecursiveSemanticAnalyser::argumentos(Node* cur_node)
         cond = cond || (m_scopes->get_scope(inner_scope)->m_arguments[counter].m_type == EType::REAL);
         if (cond)
         {
-            m_code_generator->add_code(":=", add_prefix(outer_scope,ident), "", add_prefix(inner_scope,arg_name));
+            m_code_generator->edit(counter+1, 1, add_prefix(outer_scope,ident));
+            // m_code_generator->add_code(":=", add_prefix(outer_scope,ident), "", add_prefix(inner_scope,arg_name));
             m_scopes->get_scope(inner_scope)->m_table[arg_name].second = add_prefix(outer_scope,ident);
             counter += 1;
             mais_ident_node->m_attributes["counter"] = Attribute(EType::INTEGER, counter);
@@ -128,7 +137,7 @@ void RecursiveSemanticAnalyser::restoIdent(Node* cur_node)
         auto ident = cur_node->m_attributes["ident"].to_string();
 
         expressao_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
-        expressao(expressao_node);        
+        expressao(expressao_node);
 
         
         if (m_scopes->find(scope, ident))
@@ -173,10 +182,21 @@ void RecursiveSemanticAnalyser::restoIdent(Node* cur_node)
             throw std::runtime_error(error_msg);
         }
         
+
         lista_arg_node->m_attributes["outer_scope"] = cur_node->m_attributes["scope"];
         lista_arg_node->m_attributes["inner_scope"] = cur_node->m_attributes["ident"];
+        m_code_generator = m_procedures[lista_arg_node->m_attributes["inner_scope"].to_string()];
         lista_arg(lista_arg_node);
-        m_scopes->erase_scope(lista_arg_node->m_attributes["inner_scope"].to_string());
+        
+        for(auto it = m_code_generator->m_instructions.begin(); it != m_code_generator->m_instructions.end(); ++it)
+        {
+            m_procedures[lista_arg_node->m_attributes["outer_scope"].to_string()]->add_code(
+                (*it)[0], (*it)[1], (*it)[2], (*it)[3]
+            );
+        }
+
+        m_code_generator = m_procedures[lista_arg_node->m_attributes["outer_scope"].to_string()];
+
         cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
     }
 
@@ -218,8 +238,7 @@ void RecursiveSemanticAnalyser::corpo_p(Node* cur_node)
     auto comandos_node = cur_node->child(2);
 
     dc_loc_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
-    dc_loc(dc_loc_node);
-    m_code_generator->add_code("PROCEDURE", cur_node->m_attributes["scope"].to_string(), "", "");
+    dc_loc(dc_loc_node);    
     comandos_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
     comandos(comandos_node);
 
@@ -277,10 +296,20 @@ void RecursiveSemanticAnalyser::dc_p(Node* cur_node)
 
     cur_node->m_attributes["scope"] = Attribute(EType::STRING, ident);
     m_scopes->new_scope(ident);
+    
+    m_procedures[ident] = new CodeGenerator();
+    m_code_generator = m_procedures[ident];
+
+    m_code_generator->add_code("PROCEDURE", ident, "", "");
+
     parametros_node->m_attributes["inh"] = cur_node->m_attributes["scope"];
     parametros(parametros_node);
     corpo_p_node->m_attributes["scope"] = parametros_node->m_attributes["inh"];
-    corpo_p(corpo_p_node);
+    corpo_p(corpo_p_node);    
+
+    // finalizando escopo do procedimento
+    m_scopes->erase_scope(ident, m_code_generator);   
+    m_code_generator->add_code("PARA", "", "", "");
 
     return;
 }
@@ -693,6 +722,8 @@ void RecursiveSemanticAnalyser::dc(Node* cur_node)
             auto dc_v_node = cur_node->child(0);
             auto mais_dc_node = cur_node->child(1);
             
+            m_code_generator = m_procedures["main"];
+            
             dc_v_node->m_attributes["inh"] = cur_node->m_attributes["scope"];
             dc_v(dc_v_node);
             mais_dc_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
@@ -714,9 +745,15 @@ void RecursiveSemanticAnalyser::corpo(Node* cur_node)
     auto comandos_node = cur_node->child(2);
 
     m_scopes->new_scope("main");
+    m_procedures["main"] = new CodeGenerator();
+    
+    m_procedures["main"]->add_code("PROCEDURE", "main", "", "");
+
     dc_node->m_attributes["scope"] = Attribute(EType::STRING, "main");
     dc(dc_node);
-    m_code_generator->add_code("PROCEDURE", "main", "", "");
+
+    m_code_generator = m_procedures["main"];    
+    
     comandos_node->m_attributes["scope"] = dc_node->m_attributes["scope"];
     comandos(comandos_node);
     m_code_generator->add_code("PARA", "", "", "");

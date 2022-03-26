@@ -108,15 +108,21 @@ bool Scope::find(std::string scope_id, std::string symbol)
     return false;    
 }
 
-void Scope::erase_scope(std::string scope_id)
+void Scope::erase_scope(std::string scope_id, CodeGenerator* code_gen)
 {
     SymbolTable* cur_table = m_symbol_tables[scope_id];    
-    auto symb_table = cur_table->m_table;    
+    auto symb_table = &cur_table->m_table;    
 
-    for(auto it = symb_table.begin(); it != symb_table.end(); ++it)
+    for(auto it = symb_table->begin(); it != symb_table->end(); ++it)
     {
         it->second.second = "";
-    }   
+        // code_gen->add_code(
+        //     ":=",
+        //     it->second.first.m_type == EType::REAL ? "0.0" : "0",
+        //     "",
+        //     scope_id+"_"+it->first
+        // );
+    }
 }
 
 void Scope::print()

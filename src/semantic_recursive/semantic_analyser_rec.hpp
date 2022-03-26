@@ -7,11 +7,13 @@
 
 struct RecursiveSemanticAnalyser {
     ParseTree* m_parse_tree;
-    CodeGenerator* m_code_generator;    
+    CodeGenerator* m_code_generator;
+    std::map<std::string, CodeGenerator*> m_procedures;
     Scope* m_scopes;
 
-    RecursiveSemanticAnalyser(ParseTree* parse_tree, Scope* scopes, CodeGenerator* code_generator);
+    RecursiveSemanticAnalyser(ParseTree* parse_tree, Scope* scopes);
     std::string add_prefix(std::string scope_id, std::string op);
+    void print_procedures();
 
     void analise();
     void programa(Node* cur_node);

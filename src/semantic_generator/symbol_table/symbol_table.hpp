@@ -6,6 +6,7 @@
 #include <exception>
 #include <vector>
 #include "../../misc/type.hpp"
+#include "../code_generator/code_generator.hpp"
 
 struct Symbol 
 {
@@ -56,7 +57,7 @@ struct Scope {
     SymbolTable* new_scope(std::string scope_id);
     SymbolTable* add_to_scope(std::string scope_id, Symbol symbol);
     SymbolTable* add_args(std::string scope_id, Symbol symbol);    
-    void erase_scope(std::string scope_id);
+    void erase_scope(std::string scope_id, CodeGenerator* code_gen);
     bool find(std::string scope_id, std::string symbol);
     void print();
 };
