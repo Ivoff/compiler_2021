@@ -111,7 +111,7 @@ void RecursiveSemanticAnalyser::lista_arg(Node* cur_node)
         argumentos_node->m_attributes["inner_scope"] = cur_node->m_attributes["inner_scope"];
         argumentos_node->m_attributes["counter"] = Attribute(EType::INTEGER, 0);
         argumentos(argumentos_node);
-        cur_node->m_attributes["end_loc"] = argumentos_node->m_attributes["end_loc"];
+        cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
     }
 
     return;
@@ -156,20 +156,28 @@ void RecursiveSemanticAnalyser::restoIdent(Node* cur_node)
         else
         {
             char buffer[512];
-            sprintf(buffer, "[ERRO] variável %s não existe\nRecursiveSemanticAnalyser::restoIdent:145", ident.c_str());            
+            sprintf(buffer, "[ERRO] variável %s não existe\nRecursiveSemanticAnalyser::restoIdent:145", ident.c_str());
             std::string error_msg = std::string(buffer);
-            throw std::runtime_error(error_msg);               
+            throw std::runtime_error(error_msg);
         }
     }
     else if (first_node->m_head == "<lista_arg>")
     {
         auto lista_arg_node = cur_node->child(0);        
-
+        
+        if (cur_node->m_attributes["scope"].to_string() == cur_node->m_attributes["ident"].to_string())
+        {
+            char buffer[512];
+            sprintf(buffer, "[ERRO] recursão encontrada na chamada da função %s dentro da função %s\n", cur_node->m_attributes["ident"].to_string().c_str(), cur_node->m_attributes["scope"].to_string().c_str());
+            std::string error_msg = std::string(buffer);
+            throw std::runtime_error(error_msg);
+        }
+        
         lista_arg_node->m_attributes["outer_scope"] = cur_node->m_attributes["scope"];
         lista_arg_node->m_attributes["inner_scope"] = cur_node->m_attributes["ident"];
         lista_arg(lista_arg_node);
         m_scopes->erase_scope(lista_arg_node->m_attributes["inner_scope"].to_string());
-        cur_node->m_attributes["end_loc"] = lista_arg_node->m_attributes["end_loc"];
+        cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
     }
 
     return;
@@ -281,7 +289,7 @@ void RecursiveSemanticAnalyser::pfalsa(Node* cur_node)
 {
     if (cur_node->child(0)->m_head == "&")
     {
-        cur_node->m_attributes["end_loc"] = cur_node->m_attributes["inh"];
+        cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
         return;
     }
 
@@ -289,7 +297,7 @@ void RecursiveSemanticAnalyser::pfalsa(Node* cur_node)
 
     comandos_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
     comandos(comandos_node);
-    cur_node->m_attributes["end_loc"] = comandos_node->m_attributes["end_loc"];
+    cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
 
     return;
 }
@@ -382,10 +390,10 @@ void RecursiveSemanticAnalyser::mais_comandos(Node* cur_node)
 
         comandos_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
         comandos(comandos_node);
-        cur_node->m_attributes["end_loc"] = cur_node->child(1)->m_attributes["end_loc"];
+        cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
     }
 
-    cur_node->m_attributes["end_loc"] = cur_node->m_attributes["inh"];
+    cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
 
     return;
 }
@@ -552,7 +560,7 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
         restoIdent_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
         restoIdent_node->m_attributes["ident"] = Attribute(EType::STRING, ident);
         restoIdent(restoIdent_node);        
-        cur_node->m_attributes["end_loc"] = restoIdent_node->m_attributes["end_loc"];
+        cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
     }
     else if (first_node->m_head == "if")
     {
@@ -591,10 +599,10 @@ void RecursiveSemanticAnalyser::comandos(Node* cur_node)
 
     comando_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
     comando(comando_node);    
-    mais_comandos_node->m_attributes["inh"] = comando_node->m_attributes["end_loc"];
+    mais_comandos_node->m_attributes["inh"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
     mais_comandos_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
     mais_comandos(mais_comandos_node);
-    cur_node->m_attributes["end_loc"] = mais_comandos_node->m_attributes["end_loc"];
+    cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
 
     return;
 }
