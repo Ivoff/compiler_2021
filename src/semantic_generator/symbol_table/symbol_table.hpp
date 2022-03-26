@@ -35,6 +35,7 @@ struct Symbol
 };
 
 struct SymbolTable {
+    // map (identificador_simbolo, par)
     // par(simbolo, valor)
     std::map<std::string, std::pair<Symbol, std::string >> m_table;
     std::vector<Symbol> m_arguments;
@@ -42,7 +43,7 @@ struct SymbolTable {
     SymbolTable(){};
     void add_entry(Symbol symbol);
     bool find(std::string name);
-    void print();
+    void print();    
 };
 
 struct Scope {
@@ -55,7 +56,9 @@ struct Scope {
     SymbolTable* new_scope(std::string scope_id);
     SymbolTable* add_to_scope(std::string scope_id, Symbol symbol);
     SymbolTable* add_args(std::string scope_id, Symbol symbol);    
+    void erase_scope(std::string scope_id);
     bool find(std::string scope_id, std::string symbol);
+    void print();
 };
 
 #endif

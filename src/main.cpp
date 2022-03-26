@@ -8,10 +8,10 @@
 
 int main() {
     Parser* parser = new Parser("input");    
-    
+    Scope* scopes = new Scope();
+    CodeGenerator* code_generator = new CodeGenerator();
+
     try {        
-        Scope* scopes = new Scope();
-        CodeGenerator* code_generator = new CodeGenerator();
 
         RecursiveSemanticAnalyser* analyser = new RecursiveSemanticAnalyser(
             parser->parse(),
@@ -21,11 +21,14 @@ int main() {
 
         analyser->analise();
         parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
-        code_generator->print();        
+        code_generator->print();
+        scopes->print();
     } 
     catch (std::runtime_error& ex) {
-        std::cerr << "[Runtime error] " << ex.what() << std::endl;
+        std::cerr << "[Compilation error] " << ex.what() << std::endl;
         parser->m_parse_tree->print_attr(parser->m_parse_tree->m_root, "");
+        code_generator->print();
+        scopes->print();
         std::exit(EXIT_SUCCESS);
     }    
 

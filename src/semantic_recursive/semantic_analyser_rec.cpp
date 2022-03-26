@@ -14,11 +14,25 @@ RecursiveSemanticAnalyser::RecursiveSemanticAnalyser(ParseTree* parse_tree, Scop
     m_parse_tree->m_current_node = m_parse_tree->m_root;
 }
 
+std::string RecursiveSemanticAnalyser::add_prefix(std::string scope_id, std::string op)
+{
+    if (op[0]-'0' <= 9)
+    {
+        return op;
+    }
+
+    return scope_id + "_" + op;
+}
+
+/*
+============================================================================ACOES SEMANTICAS====================================================================================== 
+ */
+
 void RecursiveSemanticAnalyser::mais_ident(Node* cur_node)
 {
     if (cur_node->child(0)->m_head == ",")
     {
-        auto argumentos_node = cur_node->child(0);
+        auto argumentos_node = cur_node->child(1);
 
         argumentos_node->m_attributes["counter"] = cur_node->m_attributes["counter"];
         argumentos_node->m_attributes["outer_scope"] = cur_node->m_attributes["outer_scope"];
@@ -39,10 +53,12 @@ void RecursiveSemanticAnalyser::argumentos(Node* cur_node)
 
     auto mais_ident_node = cur_node->child(1);
 
-    if (counter > m_scopes->get_scope(inner_scope)->m_arguments.size())
-    {
-        printf("[ERRO] muitos argumentos na função %s\n", inner_scope);
-        std::exit(0);
+    if (counter > m_scopes->get_scope(inner_scope)->m_arguments.size()-1)
+    {        
+        char buffer[512];
+        sprintf(buffer, "[ERRO] muitos argumentos na chamada da função %s\nRecursiveSemanticAnalyser::argumentos:45", inner_scope.c_str());
+        std::string error_msg = std::string(buffer);
+        throw std::runtime_error(error_msg);
     }
 
     if (m_scopes->find(outer_scope, ident))
@@ -52,8 +68,8 @@ void RecursiveSemanticAnalyser::argumentos(Node* cur_node)
         cond = cond || (m_scopes->get_scope(inner_scope)->m_arguments[counter].m_type == EType::REAL);
         if (cond)
         {
-            m_code_generator->add_code(":=", ident, "", arg_name);
-            m_scopes->get_scope(inner_scope)->m_table[arg_name].second = ident;
+            m_code_generator->add_code(":=", add_prefix(outer_scope,ident), "", add_prefix(inner_scope,arg_name));
+            m_scopes->get_scope(inner_scope)->m_table[arg_name].second = add_prefix(outer_scope,ident);
             counter += 1;
             mais_ident_node->m_attributes["counter"] = Attribute(EType::INTEGER, counter);
             mais_ident_node->m_attributes["outer_scope"] = cur_node->m_attributes["outer_scope"];
@@ -62,15 +78,19 @@ void RecursiveSemanticAnalyser::argumentos(Node* cur_node)
             cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, m_code_generator->m_cur_line);
         }
         else 
-        {
-            printf("[ERRO] variável %s não corresponde ao tipo\n", ident, m_scopes->get_scope(inner_scope)->m_arguments[counter].type_to_string());
-            std::exit(0);
+        {            
+            char buffer[512];
+            sprintf(buffer, "[ERRO] variável %s não corresponde ao tipo %s\nRecursiveSemanticAnalyser::argumentos:69", ident.c_str(), m_scopes->get_scope(inner_scope)->m_arguments[counter].type_to_string().c_str());
+            std::string error_msg = std::string(buffer);
+            throw std::runtime_error(error_msg);
         }
     }
     else 
     {
-        printf("[ERRO] variável %s não existe\n", ident);
-        std::exit(0);
+        char buffer[512];
+        sprintf(buffer, "[ERRO] variável %s não existe\nRecursiveSemanticAnalyser::argumentos:77", ident.c_str());
+        std::string error_msg = std::string(buffer);
+        throw std::runtime_error(error_msg);        
     }
 
     return;
@@ -118,23 +138,27 @@ void RecursiveSemanticAnalyser::restoIdent(Node* cur_node)
                 m_scopes->get_scope(scope)->m_table[ident].second = expressao_node->m_attributes["syn"].to_string();                
                 int three_addr_loc = m_code_generator->add_code(
                     ":=", 
-                    m_scopes->get_scope(scope)->m_table[ident].second, 
+                    add_prefix(scope, m_scopes->get_scope(scope)->m_table[ident].second), 
                     "", 
-                    ident
+                    add_prefix(scope,ident)
                 );
 
                 cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, three_addr_loc);
             }
             else
             {
-                printf("[ERRO] variável %s não corresponde ao tipo da expressao\n", ident);
-                std::exit(0);
+                char buffer[512];
+                sprintf(buffer, "[ERRO] variável %s não corresponde ao tipo da expressao\nRecursiveSemanticAnalyser::restoIdent:137", ident.c_str());
+                std::string error_msg = std::string(buffer);
+                throw std::runtime_error(error_msg);
             }
         }
         else
         {
-            printf("[ERRO] variável %s não existe\n", ident);
-            std::exit(0);
+            char buffer[512];
+            sprintf(buffer, "[ERRO] variável %s não existe\nRecursiveSemanticAnalyser::restoIdent:145", ident.c_str());            
+            std::string error_msg = std::string(buffer);
+            throw std::runtime_error(error_msg);               
         }
     }
     else if (first_node->m_head == "<lista_arg>")
@@ -144,6 +168,7 @@ void RecursiveSemanticAnalyser::restoIdent(Node* cur_node)
         lista_arg_node->m_attributes["outer_scope"] = cur_node->m_attributes["scope"];
         lista_arg_node->m_attributes["inner_scope"] = cur_node->m_attributes["ident"];
         lista_arg(lista_arg_node);
+        m_scopes->erase_scope(lista_arg_node->m_attributes["inner_scope"].to_string());
         cur_node->m_attributes["end_loc"] = lista_arg_node->m_attributes["end_loc"];
     }
 
@@ -186,6 +211,7 @@ void RecursiveSemanticAnalyser::corpo_p(Node* cur_node)
 
     dc_loc_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
     dc_loc(dc_loc_node);
+    m_code_generator->add_code("PROCEDURE", cur_node->m_attributes["scope"].to_string(), "", "");
     comandos_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
     comandos(comandos_node);
 
@@ -213,9 +239,11 @@ void RecursiveSemanticAnalyser::lista_par(Node* cur_node)
 
     tipo_var(tipo_var_node);
     variaveis_node->m_attributes["inh"] = tipo_var_node->m_attributes["syn"];
-    variaveis_node->m_attributes["scope"] = tipo_var_node->m_attributes["scope"];
+    variaveis_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
+    variaveis_node->m_attributes["args"] = Attribute(EType::STRING, "true");
     variaveis(variaveis_node);
     mais_par_node->m_attributes["scope"] = variaveis_node->m_attributes["scope"];
+    mais_par(mais_par_node);
 
     return;
 }
@@ -239,7 +267,6 @@ void RecursiveSemanticAnalyser::dc_p(Node* cur_node)
     auto parametros_node = cur_node->child(2);
     auto corpo_p_node = cur_node->child(3);
 
-    printf("chega aqui\n");
     cur_node->m_attributes["scope"] = Attribute(EType::STRING, ident);
     m_scopes->new_scope(ident);
     parametros_node->m_attributes["inh"] = cur_node->m_attributes["scope"];
@@ -293,14 +320,14 @@ void RecursiveSemanticAnalyser::condicao(Node* cur_node)
     
     m_code_generator->add_code(
         cur_node->m_attributes["rel_op"].to_string(),
-        cur_node->m_attributes["left_op"].to_string(),
-        cur_node->m_attributes["right_op"].to_string(),
-        cur_node->m_attributes["syn"].to_string()
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["left_op"].to_string()),
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["right_op"].to_string()),
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["syn"].to_string())
     );
 
     int three_addr_loc = m_code_generator->add_code(
         "JF",
-        cur_node->m_attributes["syn"].to_string(),
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["syn"].to_string()),
         "",
         ""
     );
@@ -333,9 +360,9 @@ void RecursiveSemanticAnalyser::outros_termos(Node* cur_node)
 
     m_code_generator->add_code(
         cur_node->m_attributes["op"].to_string(),
-        cur_node->m_attributes["inh"].to_string(),
-        outros_termos1_node->m_attributes["syn"].to_string(),
-        cur_node->m_attributes["syn"].to_string()
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["inh"].to_string()),
+        add_prefix(cur_node->m_attributes["scope"].to_string(), outros_termos1_node->m_attributes["syn"].to_string()),
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["syn"].to_string())
     );
 
     return;
@@ -386,9 +413,9 @@ void RecursiveSemanticAnalyser::mais_fatores(Node* cur_node)
 
     m_code_generator->add_code(
         cur_node->m_attributes["op"].to_string(),
-        cur_node->m_attributes["inh"].to_string(),
-        mais_fatores1_node->m_attributes["syn"].to_string(),
-        cur_node->m_attributes["syn"].to_string()
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["inh"].to_string()),
+        add_prefix(cur_node->m_attributes["scope"].to_string(), mais_fatores1_node->m_attributes["syn"].to_string()),
+        add_prefix(cur_node->m_attributes["scope"].to_string(), cur_node->m_attributes["syn"].to_string())
     );
 
     return;
@@ -408,15 +435,17 @@ void RecursiveSemanticAnalyser::fator(Node* cur_node)
     if (first_node->m_head == "ident") 
     {
         auto ident = first_node->m_terminal->lexem_to_str();
-
+        
         if (m_scopes->m_symbol_tables[scope]->find(ident))
-        {            
+        {
             cur_node->m_attributes["syn"] = Attribute(m_scopes->m_symbol_tables[scope]->m_table[ident].first.m_type, ident);
         }            
         else
-        {
-            printf("[ERRO] variável %s não existe\n", ident);
-            std::exit(0);
+        {            
+            char buffer[512];
+            sprintf(buffer, "[ERRO] variável %s não existe\nRecursiveSemanticAnalyser::fator:428", ident.c_str());            
+            std::string error_msg = std::string(buffer);
+            throw std::runtime_error(error_msg);            
         }
 
     }
@@ -500,17 +529,19 @@ void RecursiveSemanticAnalyser::comando(Node* cur_node)
         {
             int three_addr_loc = m_code_generator->add_code(
                 first_node->m_head, 
-                first_node->m_head[0] == 'r' ? "" : ident, 
+                first_node->m_head[0] == 'r' ? "" : add_prefix(scope, ident),
                 "", 
-                first_node->m_head[0] == 'r' ? ident : ""
+                first_node->m_head[0] == 'r' ? add_prefix(scope, ident) : ""
             );
 
             cur_node->m_attributes["end_loc"] = Attribute(EType::INTEGER, three_addr_loc);
         }
         else
         {
-            printf("[ERRO] variável %s não existe\n", ident);
-            std::exit(0);
+            char buffer[512];
+            sprintf(buffer, "[ERRO] variável %s não existe\nRecursiveSemanticAnalyser::comando:524", ident.c_str());            
+            std::string error_msg = std::string(buffer);
+            throw std::runtime_error(error_msg);             
         }        
     }
     else if (first_node->m_head == "ident")
@@ -574,7 +605,7 @@ void RecursiveSemanticAnalyser::mais_dc(Node* cur_node)
     {
         cur_node->child(1)->m_attributes["scope"] = cur_node->m_attributes["scope"];
         dc(cur_node->child(1));
-    }        
+    }
     else
         return;
 }
@@ -585,6 +616,7 @@ void RecursiveSemanticAnalyser::mais_var(Node* cur_node)
     {
         cur_node->child(1)->m_attributes["inh"] = cur_node->m_attributes["inh"];
         cur_node->child(1)->m_attributes["scope"] = cur_node->m_attributes["scope"];
+        cur_node->child(1)->m_attributes["args"] = cur_node->m_attributes["args"];
         variaveis(cur_node->child(1));
     } 
     else
@@ -598,19 +630,20 @@ void RecursiveSemanticAnalyser::variaveis(Node* cur_node)
     auto scope = cur_node->m_attributes["scope"].to_string();
 
     m_scopes->add_to_scope(scope, Symbol(ident, type));
-    if (scope != "main")
+    if (scope != "main" && cur_node->m_attributes["args"].to_string() == "true")
     {
         m_scopes->add_args(scope, Symbol(ident, type));
     }
     
     if (type == "real")
-        m_code_generator->add_code("ALME", "0.0", "", scope + ident);
+        m_code_generator->add_code("ALME", "0.0", "", add_prefix(scope, ident));
     else
-        m_code_generator->add_code("ALME", "0", "", scope + ident);
+        m_code_generator->add_code("ALME", "0", "", add_prefix(scope, ident));
 
     auto mais_var_node = cur_node->child(1);
     mais_var_node->m_attributes["inh"] = cur_node->m_attributes["inh"];
     mais_var_node->m_attributes["scope"] = cur_node->m_attributes["scope"];
+    mais_var_node->m_attributes["args"] = cur_node->m_attributes["args"];
     mais_var(mais_var_node);
 
     return;
@@ -643,7 +676,7 @@ void RecursiveSemanticAnalyser::dc_v(Node* cur_node)
 
 void RecursiveSemanticAnalyser::dc(Node* cur_node) 
 {
-    if (cur_node->m_node_list->size() > 1) 
+    if (cur_node->m_node_list->size() >= 1) 
     {                        
         auto first_node = cur_node->child(0);
 
@@ -659,8 +692,7 @@ void RecursiveSemanticAnalyser::dc(Node* cur_node)
         }
         else if(first_node->m_head == "<dc_p>")
         {
-            auto dc_p_node = cur_node->child(0);
-
+            auto dc_p_node = cur_node->child(0);            
             dc_p(dc_p_node);
         }
     }
@@ -676,6 +708,7 @@ void RecursiveSemanticAnalyser::corpo(Node* cur_node)
     m_scopes->new_scope("main");
     dc_node->m_attributes["scope"] = Attribute(EType::STRING, "main");
     dc(dc_node);
+    m_code_generator->add_code("PROCEDURE", "main", "", "");
     comandos_node->m_attributes["scope"] = dc_node->m_attributes["scope"];
     comandos(comandos_node);
     m_code_generator->add_code("PARA", "", "", "");

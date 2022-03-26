@@ -17,10 +17,22 @@ bool SymbolTable::find(std::string name)
 }
 
 void SymbolTable::print() {
+    
+    std::string aux = "";
+    
     for(auto it = m_table.begin(); it != m_table.end(); ++it)
-    {
-        printf("%s %s: %s\n", it->second.first.type_to_string().c_str(), it->first.c_str(), it->second.second.c_str());
-    }
+    {        
+        for(auto args_it = m_arguments.begin(); args_it != m_arguments.end(); ++args_it)
+        {
+            if (args_it->m_name == it->first)
+            {
+                aux = "[arg] ";
+                break;
+            }
+        }
+        printf("\t%s%s %s: %s\n", aux.c_str(), it->second.first.type_to_string().c_str(), it->first.c_str(), it->second.second.c_str());
+        aux = "";
+    }    
 }
 
 SymbolTable* Scope::get_scope(std::string scope_id)
@@ -94,4 +106,24 @@ bool Scope::find(std::string scope_id, std::string symbol)
     }
 
     return false;    
+}
+
+void Scope::erase_scope(std::string scope_id)
+{
+    SymbolTable* cur_table = m_symbol_tables[scope_id];    
+    auto symb_table = cur_table->m_table;    
+
+    for(auto it = symb_table.begin(); it != symb_table.end(); ++it)
+    {
+        it->second.second = "";
+    }   
+}
+
+void Scope::print()
+{
+    for(auto it = m_symbol_tables.begin(); it != m_symbol_tables.end(); ++it)
+    {
+        printf("%s\n", it->first.c_str());
+        it->second->print();        
+    }
 }
